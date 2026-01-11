@@ -27,7 +27,7 @@ An OpenCode plugin that syncs skills and agents from Git repositories, making th
    # Global installation
    mkdir -p ~/.config/opencode/plugin
    cd ~/.config/opencode/plugin
-   git clone https://github.com/your-org/opencode-remote-config.git
+   git clone https://github.com/jgordijn/opencode-remote-config.git
    cd opencode-remote-config
    bun install && bun run build
    ```
@@ -36,7 +36,7 @@ An OpenCode plugin that syncs skills and agents from Git repositories, making th
    ```bash
    mkdir -p .opencode/plugin
    cd .opencode/plugin
-   git clone https://github.com/your-org/opencode-remote-config.git
+   git clone https://github.com/jgordijn/opencode-remote-config.git
    cd opencode-remote-config
    bun install && bun run build
    ```
@@ -225,7 +225,7 @@ This section contains instructions for LLM agents helping users set up the openc
    # Global installation
    mkdir -p ~/.config/opencode/plugin
    cd ~/.config/opencode/plugin
-   git clone https://github.com/your-org/opencode-remote-config.git
+   git clone https://github.com/jgordijn/opencode-remote-config.git
    cd opencode-remote-config
    bun install && bun run build
    ```
