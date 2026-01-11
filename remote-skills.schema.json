@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/sst/opencode/plugins/remote-skills/config.json",
+  "title": "OpenCode Remote Skills Configuration",
+  "description": "Configuration for the remote-skills plugin that syncs skills, agents, and commands from Git repositories",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for editor support"
+    },
+    "repositories": {
+      "type": "array",
+      "description": "List of Git repositories to sync skills, agents, and commands from",
+      "default": [],
+      "items": {
+        "$ref": "#/definitions/repository"
+      }
+    },
+    "sync": {
+      "type": "string",
+      "description": "Sync mode: 'blocking' waits for sync before OpenCode is ready, 'background' syncs asynchronously",
+      "enum": ["blocking", "background"],
+      "default": "blocking"
+    }
+  },
+  "definitions": {
+    "repository": {
+      "type": "object",
+      "description": "Configuration for a single Git repository",
+      "additionalProperties": false,
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Git URL (SSH or HTTPS). Examples: git@github.com:org/repo.git, https://github.com/org/repo.git",
+          "minLength": 1
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref to checkout (branch, tag, or commit SHA). Defaults to repository's default branch"
+        },
+        "skills": {
+          "description": "Skills to import. Use '*' for all skills, or an array of skill names",
+          "oneOf": [
+            {
+              "type": "string",
+              "const": "*",
+              "description": "Import all skills from the repository"
+            },
+            {
+              "type": "array",
+              "description": "List of specific skill names to import",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "agents": {
+          "description": "Agents to import. Use '*' for all agents, or an array of agent names",
+          "oneOf": [
+            {
+              "type": "string",
+              "const": "*",
+              "description": "Import all agents from the repository"
+            },
+            {
+              "type": "array",
+              "description": "List of specific agent names to import",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "commands": {
+          "description": "Commands (slash commands) to import. Use '*' for all commands, or an array of command names",
+          "oneOf": [
+            {
+              "type": "string",
+              "const": "*",
+              "description": "Import all commands from the repository"
+            },
+            {
+              "type": "array",
+              "description": "List of specific command names to import",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "plugins": {
+          "description": "Plugins (hook files) to import. Use '*' for all plugins, or an array of plugin names. Plugins must be self-contained (no local imports).",
+          "oneOf": [
+            {
+              "type": "string",
+              "const": "*",
+              "description": "Import all plugins from the repository"
+            },
+            {
+              "type": "array",
+              "description": "List of specific plugin names to import",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
