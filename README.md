@@ -21,27 +21,49 @@ An OpenCode plugin that syncs skills and agents from Git repositories, making th
 
 ### Installation
 
-1. **Install the plugin** to your OpenCode plugin directory:
+#### Option 1: npm (Recommended)
 
-   ```bash
-   # Global installation
-   mkdir -p ~/.config/opencode/plugin
-   cd ~/.config/opencode/plugin
-   git clone https://github.com/jgordijn/opencode-remote-config.git
-   cd opencode-remote-config
-   bun install && bun run build
-   ```
+```bash
+# Global installation
+npm install -g @jgordijn/opencode-remote-config
 
-   Or for a project-specific installation:
-   ```bash
-   mkdir -p .opencode/plugin
-   cd .opencode/plugin
-   git clone https://github.com/jgordijn/opencode-remote-config.git
-   cd opencode-remote-config
-   bun install && bun run build
-   ```
+# Or with bun
+bun add -g @jgordijn/opencode-remote-config
+```
 
-2. **Create the configuration file** (`~/.config/opencode/remote-config.json` or `.opencode/remote-config.json`):
+Then add the plugin to your OpenCode config (`~/.config/opencode/opencode.json` or `.opencode/opencode.json`):
+
+```json
+{
+  "plugins": ["@jgordijn/opencode-remote-config"]
+}
+```
+
+#### Option 2: Git clone
+
+For development or to get the latest changes:
+
+```bash
+# Global installation
+mkdir -p ~/.config/opencode/plugin
+cd ~/.config/opencode/plugin
+git clone https://github.com/jgordijn/opencode-remote-config.git
+cd opencode-remote-config
+bun install && bun run build
+```
+
+Or for a project-specific installation:
+```bash
+mkdir -p .opencode/plugin
+cd .opencode/plugin
+git clone https://github.com/jgordijn/opencode-remote-config.git
+cd opencode-remote-config
+bun install && bun run build
+```
+
+### Configuration
+
+**Create the configuration file** (`~/.config/opencode/remote-config.json` or `.opencode/remote-config.json`):
 
    ```jsonc
    {
@@ -219,10 +241,21 @@ This section contains instructions for LLM agents helping users set up the openc
    opencode --version
    ```
 
-2. **Clone and build the plugin:**
+2. **Install the plugin via npm:**
    
    ```bash
-   # Global installation
+   npm install -g @jgordijn/opencode-remote-config
+   ```
+   
+   Then add to OpenCode config (`~/.config/opencode/opencode.json`):
+   ```json
+   {
+     "plugins": ["@jgordijn/opencode-remote-config"]
+   }
+   ```
+
+   **Alternative: Git clone installation**
+   ```bash
    mkdir -p ~/.config/opencode/plugin
    cd ~/.config/opencode/plugin
    git clone https://github.com/jgordijn/opencode-remote-config.git
@@ -430,14 +463,26 @@ To cleanly remove imported skills, agents, and plugins:
 
 2. **Restart OpenCode** - This triggers cleanup of stale symlinks
 
-3. **Remove the plugin** (optional) - Delete the plugin directory:
+3. **Remove the plugin** (optional):
    
-   For global installation:
+   If installed via npm:
+   ```bash
+   npm uninstall -g @jgordijn/opencode-remote-config
+   ```
+   
+   Then remove from `opencode.json`:
+   ```json
+   {
+     "plugins": []
+   }
+   ```
+   
+   If installed via git clone (global):
    ```bash
    rm -rf ~/.config/opencode/plugin/opencode-remote-config
    ```
    
-   For project-local installation:
+   If installed via git clone (project-local):
    ```bash
    rm -rf .opencode/plugin/opencode-remote-config
    ```

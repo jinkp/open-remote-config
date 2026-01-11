@@ -1,7 +1,15 @@
 {
-  "name": "opencode-remote-config",
+  "name": "@jgordijn/opencode-remote-config",
   "version": "0.1.0",
   "description": "OpenCode plugin to sync skills, agents and commands from Git repositories",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jgordijn/opencode-remote-config.git"
+  },
+  "homepage": "https://github.com/jgordijn/opencode-remote-config#readme",
+  "bugs": {
+    "url": "https://github.com/jgordijn/opencode-remote-config/issues"
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
