@@ -1,0 +1,7 @@
+{
+  "$schema": "../manifest.schema.json",
+  "instructions": [
+    "test-instruction.md",
+    "guidelines/coding-rules.md"
+  ]
+}
