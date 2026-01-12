@@ -100,6 +100,7 @@ The plugin reads its configuration from a separate JSON file (not `opencode.json
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `installMethod` | `"link"` or `"copy"` | `"link"` | How to install skills/plugins (symlinks or copies) |
 | `repositories` | Array | `[]` | List of repositories to sync |
 | `repositories[].url` | String | Required | Git URL, HTTPS URL, or `file://` path |
 | `repositories[].ref` | String | Default branch | Branch, tag, or commit SHA (git only) |
@@ -108,6 +109,50 @@ The plugin reads its configuration from a separate JSON file (not `opencode.json
 | `repositories[].commands` | `"*"` or `{ include: [...] }` or `{ exclude: [...] }` | All commands | Slash commands to import |
 | `repositories[].plugins` | `"*"` or `{ include: [...] }` or `{ exclude: [...] }` | All plugins | Plugins to import |
 | `repositories[].instructions` | `"*"` or `{ include: [...] }` or `{ exclude: [...] }` | All instructions | Instructions from manifest to import |
+
+### Installation Method
+
+By default, skills and plugins are installed using symlinks. This is fast and efficient but may not work in all environments.
+
+#### Configuration
+
+```json
+{
+  "installMethod": "link"
+}
+```
+
+| Value | Description |
+|-------|-------------|
+| `link` | Create symlinks (default). Fast, but may not work in containers or on Windows. |
+| `copy` | Copy files. Works everywhere. Uses rsync if available for efficiency. |
+
+#### When to Use Copy Mode
+
+Use `"installMethod": "copy"` when:
+
+- **Dev Containers**: Symlinks break because paths differ between host and container
+- **Windows**: Symlinks require admin privileges or developer mode
+- **Network filesystems**: Some NFS/CIFS mounts don't support symlinks properly
+
+#### Example
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/jgordijn/opencode-remote-config/main/remote-skills.schema.json",
+  "installMethod": "copy",
+  "repositories": [
+    {
+      "url": "git@github.com:your-org/shared-skills.git"
+    }
+  ]
+}
+```
+
+When using copy mode:
+- rsync is preferred if available (efficient incremental updates)
+- Falls back to Node.js file copy if rsync is unavailable
+- Files are kept in sync with the source repository
 
 ### Local Directories
 
