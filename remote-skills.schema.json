@@ -23,6 +23,12 @@
       "description": "Sync mode: 'blocking' waits for sync before OpenCode is ready, 'background' syncs asynchronously",
       "enum": ["blocking", "background"],
       "default": "blocking"
+    },
+    "installMethod": {
+      "type": "string",
+      "description": "How to install skills and plugins: 'link' creates symlinks (fast, may not work in containers), 'copy' copies files (works everywhere, uses rsync if available)",
+      "enum": ["link", "copy"],
+      "default": "link"
     }
   },
   "definitions": {
