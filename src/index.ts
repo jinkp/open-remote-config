@@ -12,11 +12,11 @@ import {
   type InstallMethod,
 } from "./install"
 import {
-  createPluginSymlinks,
-  getRemotePluginSymlinks,
-  cleanupStalePluginSymlinks,
+  createPluginInstalls,
+  getRemotePluginInstalls,
+  cleanupStalePluginInstalls,
   getPluginSymlinkName,
-} from "./plugin-symlinks"
+} from "./plugin-install"
 import type { PluginInfo } from "./plugin-info"
 import { log, logError } from "./logging"
 
@@ -178,32 +178,32 @@ async function performSync(
     allPlugins.push(...result.plugins)
   }
 
-  // Get existing plugin symlinks before making changes
-  const existingPluginSymlinks = new Set(getRemotePluginSymlinks())
+  // Get existing plugin installs before making changes
+  const existingPluginInstalls = new Set(getRemotePluginInstalls())
   
-  // Create symlinks for all plugins
-  const newPluginSymlinks = new Set<string>()
+  // Install all plugins (using configured method: link or copy)
+  const newPluginInstalls = new Set<string>()
   if (allPlugins.length > 0) {
-    const symlinkResults = createPluginSymlinks(allPlugins)
-    for (const sr of symlinkResults) {
+    const installResults = createPluginInstalls(allPlugins, undefined, config.installMethod)
+    for (const sr of installResults) {
       if (!sr.error) {
-        newPluginSymlinks.add(sr.symlinkName)
+        newPluginInstalls.add(sr.symlinkName)
       } else {
-        logError(`✗ Failed to create plugin symlink for ${sr.pluginName}: ${sr.error}`)
+        logError(`✗ Failed to install plugin ${sr.pluginName}: ${sr.error}`)
       }
     }
     log(`Discovered ${allPlugins.length} remote plugins`)
   }
 
-  // Clean up stale plugin symlinks
-  const pluginCleanup = cleanupStalePluginSymlinks(newPluginSymlinks)
+  // Clean up stale plugin installs
+  const pluginCleanup = cleanupStalePluginInstalls(newPluginInstalls)
   if (pluginCleanup.removed.length > 0) {
-    log(`Cleaned up ${pluginCleanup.removed.length} stale plugin symlinks`)
+    log(`Cleaned up ${pluginCleanup.removed.length} stale plugin installs`)
   }
 
   // Detect if plugins changed (for restart notification)
-  const pluginsChanged = !setsEqual(existingPluginSymlinks, newPluginSymlinks)
-  const totalPlugins = newPluginSymlinks.size
+  const pluginsChanged = !setsEqual(existingPluginInstalls, newPluginInstalls)
+  const totalPlugins = newPluginInstalls.size
 
   return { results, skippedConflicts, totalSkills, remoteAgents, remoteCommands, remoteInstructions, pluginsChanged, totalPlugins }
 }
