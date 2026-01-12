@@ -91,11 +91,12 @@ async function performSync(
   totalSkills: number
   remoteAgents: Map<string, RemoteAgent>
   remoteCommands: Map<string, RemoteCommand>
+  remoteInstructions: string[]
   pluginsChanged: boolean
   totalPlugins: number
 }> {
   if (config.repositories.length === 0) {
-    return { results: [], skippedConflicts: [], totalSkills: 0, remoteAgents: new Map(), remoteCommands: new Map(), pluginsChanged: false, totalPlugins: 0 }
+    return { results: [], skippedConflicts: [], totalSkills: 0, remoteAgents: new Map(), remoteCommands: new Map(), remoteInstructions: [], pluginsChanged: false, totalPlugins: 0 }
   }
 
   log(`Syncing ${config.repositories.length} repositories...`)
@@ -202,6 +203,19 @@ async function performSync(
     log(`Discovered ${remoteCommands.size} remote commands`)
   }
 
+  // Collect instructions from all repositories (no first-wins, append all)
+  const remoteInstructions: string[] = []
+  for (const result of results) {
+    if (result.error) continue
+    for (const instruction of result.instructions) {
+      remoteInstructions.push(instruction.path)
+    }
+  }
+
+  if (remoteInstructions.length > 0) {
+    log(`Discovered ${remoteInstructions.length} remote instructions`)
+  }
+
   // Collect all plugins from repositories
   const allPlugins: PluginInfo[] = []
   for (const result of results) {
@@ -236,7 +250,7 @@ async function performSync(
   const pluginsChanged = !setsEqual(existingPluginSymlinks, newPluginSymlinks)
   const totalPlugins = newPluginSymlinks.size
 
-  return { results, skippedConflicts, totalSkills, remoteAgents, remoteCommands, pluginsChanged, totalPlugins }
+  return { results, skippedConflicts, totalSkills, remoteAgents, remoteCommands, remoteInstructions, pluginsChanged, totalPlugins }
 }
 
 /**
@@ -281,7 +295,7 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
   }
 
   // Sync repositories and discover agents/commands (blocking - they are needed for config resolution)
-  const { totalSkills, skippedConflicts, remoteAgents, remoteCommands, pluginsChanged, totalPlugins } = await performSync(pluginConfig)
+  const { totalSkills, skippedConflicts, remoteAgents, remoteCommands, remoteInstructions, pluginsChanged, totalPlugins } = await performSync(pluginConfig)
   
   // Notify user if plugins changed (requires restart to take effect)
   if (pluginsChanged) {
@@ -292,6 +306,7 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
   const parts: string[] = []
   if (totalSkills > 0) parts.push(`${totalSkills} skills`)
   if (totalPlugins > 0) parts.push(`${totalPlugins} plugins`)
+  if (remoteInstructions.length > 0) parts.push(`${remoteInstructions.length} instructions`)
   
   let message: string
   if (parts.length === 0) {
@@ -362,6 +377,28 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
           if (injectedCommandCount > 0) {
             log(`Injected ${injectedCommandCount} remote commands into config`)
           }
+        }
+      }
+      
+      // Inject instructions
+      if (remoteInstructions.length > 0) {
+        // Validate config.instructions type: must be undefined, string, or string[]
+        if (config.instructions !== undefined && 
+            typeof config.instructions !== "string" && 
+            !Array.isArray(config.instructions)) {
+          logError("config.instructions is not a string or array, skipping instruction injection")
+        } else if (Array.isArray(config.instructions) && 
+                   !config.instructions.every((x: unknown) => typeof x === "string")) {
+          logError("config.instructions contains non-string elements, skipping instruction injection")
+        } else {
+          // Ensure config.instructions is an array
+          if (!Array.isArray(config.instructions)) {
+            config.instructions = config.instructions ? [config.instructions] : []
+          }
+          
+          // Append all remote instructions
+          config.instructions.push(...remoteInstructions)
+          log(`Appended ${remoteInstructions.length} remote instructions`)
         }
       }
     },
