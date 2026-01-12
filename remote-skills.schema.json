@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/sst/opencode/plugins/remote-config/config.json",
   "title": "OpenCode Remote Config Configuration",
-  "description": "Configuration for the remote-config plugin that syncs skills, agents, and commands from Git repositories",
+  "description": "Configuration for the remote-config plugin that syncs skills, agents, commands, plugins, and instructions from Git repositories",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -12,7 +12,7 @@
     },
     "repositories": {
       "type": "array",
-      "description": "List of Git repositories to sync skills, agents, and commands from",
+      "description": "List of Git repositories to sync skills, agents, commands, plugins, and instructions from",
       "default": [],
       "items": {
         "$ref": "#/definitions/repository"
@@ -103,6 +103,23 @@
             {
               "type": "array",
               "description": "List of specific plugin names to import",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "instructions": {
+          "description": "Instructions to import from manifest.json. Use '*' for all instructions, or an array of instruction names (relative paths as defined in manifest.json)",
+          "oneOf": [
+            {
+              "type": "string",
+              "const": "*",
+              "description": "Import all instructions from the repository's manifest.json"
+            },
+            {
+              "type": "array",
+              "description": "List of specific instruction names to import",
               "items": {
                 "type": "string"
               }
