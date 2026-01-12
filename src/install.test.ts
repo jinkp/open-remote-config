@@ -277,7 +277,7 @@ describe("install", () => {
       expect(result.has("repo2/copied-skill")).toBe(true)
     })
 
-    test("ignores directories without SKILL.md (not installed skills)", () => {
+    test("tracks directories without SKILL.md for cleanup", () => {
       const repoDir = path.join(testPluginsDir, "repo3")
       const targetPath = path.join(repoDir, "random-dir")
 
@@ -285,7 +285,9 @@ describe("install", () => {
       fs.writeFileSync(path.join(targetPath, "other.txt"), "not a skill")
 
       const result = getExistingInstallsInDir(testPluginsDir)
-      expect(result.size).toBe(0)
+      expect(result.size).toBe(1)
+      expect(result.has("repo3/random-dir")).toBe(true)
+      expect(result.get("repo3/random-dir")).toBe(targetPath)
     })
 
     test("finds both symlinks and copied skills", () => {
@@ -489,10 +491,8 @@ function getExistingInstallsInDir(pluginsDir: string): Map<string, string> {
         const target = fs.readlinkSync(fullPath)
         installs.set(relativePath, target)
       } else if (skillEntry.isDirectory()) {
-        const skillMdPath = path.join(fullPath, "SKILL.md")
-        if (fs.existsSync(skillMdPath)) {
-          installs.set(relativePath, fullPath)
-        }
+        // Copy mode: track all non-hidden directories for cleanup
+        installs.set(relativePath, fullPath)
       }
     }
   }

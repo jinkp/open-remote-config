@@ -240,11 +240,8 @@ export function getExistingInstalls(): Map<string, string> {
         const target = fs.readlinkSync(fullPath)
         installs.set(relativePath, target)
       } else if (skillEntry.isDirectory()) {
-        // Copy mode: check if it looks like an installed skill (has SKILL.md)
-        const skillMdPath = path.join(fullPath, "SKILL.md")
-        if (fs.existsSync(skillMdPath)) {
-          installs.set(relativePath, fullPath)
-        }
+        // Copy mode: track all non-hidden directories for cleanup
+        installs.set(relativePath, fullPath)
       }
     }
   }
