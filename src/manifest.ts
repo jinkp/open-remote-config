@@ -9,7 +9,7 @@ const MANIFEST_FILENAME = "manifest.json"
  * Checks if a path contains traversal or self-reference segments ("." or "..").
  * Splits on "/" and checks for "." or ".." as standalone segments.
  */
-function containsPathTraversal(path: string): boolean {
+export function containsPathTraversal(path: string): boolean {
   return path.split("/").some((segment) => segment === ".." || segment === ".")
 }
 
@@ -81,19 +81,27 @@ export const ManifestSchema = z.object({
 export type Manifest = z.infer<typeof ManifestSchema>
 
 /**
+ * Result of loading a manifest file.
+ */
+export type ManifestResult =
+  | { status: "found"; manifest: Manifest }
+  | { status: "not-found" }
+  | { status: "invalid"; error: string }
+
+/**
  * Load and parse the manifest.json file from a repository.
  * 
  * Uses synchronous file operations because this runs at plugin load time
  * with a small number of repositories, where blocking is acceptable.
  * 
  * @param repoPath - The path to the repository root
- * @returns The parsed manifest, or null if the file doesn't exist or is invalid
+ * @returns ManifestResult indicating found, not-found, or invalid with error details
  */
-export function loadManifest(repoPath: string): Manifest | null {
+export function loadManifest(repoPath: string): ManifestResult {
   const manifestPath = join(repoPath, MANIFEST_FILENAME)
 
   if (!existsSync(manifestPath)) {
-    return null
+    return { status: "not-found" }
   }
 
   try {
@@ -102,16 +110,18 @@ export function loadManifest(repoPath: string): Manifest | null {
     const result = ManifestSchema.safeParse(parsed)
 
     if (!result.success) {
+      const errorMessage = JSON.stringify(result.error.format())
       console.warn(
         `[remote-config] Invalid manifest.json in ${repoPath}:`,
         result.error.format()
       )
-      return null
+      return { status: "invalid", error: errorMessage }
     }
 
-    return result.data
+    return { status: "found", manifest: result.data }
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
     console.warn(`[remote-config] Error reading manifest.json in ${repoPath}:`, error)
-    return null
+    return { status: "invalid", error: errorMessage }
   }
 }

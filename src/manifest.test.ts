@@ -187,9 +187,9 @@ describe("manifest", () => {
       rmSync(testDir, { recursive: true, force: true })
     })
 
-    test("returns null when manifest.json does not exist", () => {
+    test("returns not-found when manifest.json does not exist", () => {
       const result = loadManifest(testDir)
-      expect(result).toBeNull()
+      expect(result.status).toBe("not-found")
     })
 
     test("loads valid manifest.json", () => {
@@ -202,19 +202,24 @@ describe("manifest", () => {
       )
 
       const result = loadManifest(testDir)
-      expect(result).not.toBeNull()
-      expect(result?.instructions).toEqual(["README.md"])
+      expect(result.status).toBe("found")
+      if (result.status === "found") {
+        expect(result.manifest.instructions).toEqual(["README.md"])
+      }
     })
 
-    test("returns null for invalid JSON", () => {
+    test("returns invalid for invalid JSON", () => {
       const manifestPath = join(testDir, "manifest.json")
       writeFileSync(manifestPath, "{ invalid json }")
 
       const result = loadManifest(testDir)
-      expect(result).toBeNull()
+      expect(result.status).toBe("invalid")
+      if (result.status === "invalid") {
+        expect(result.error).toBeDefined()
+      }
     })
 
-    test("returns null when validation fails", () => {
+    test("returns invalid when validation fails", () => {
       const manifestPath = join(testDir, "manifest.json")
       writeFileSync(
         manifestPath,
@@ -224,7 +229,7 @@ describe("manifest", () => {
       )
 
       const result = loadManifest(testDir)
-      expect(result).toBeNull()
+      expect(result.status).toBe("invalid")
     })
 
     test("returns default empty instructions when field is missing", () => {
@@ -232,11 +237,13 @@ describe("manifest", () => {
       writeFileSync(manifestPath, JSON.stringify({}))
 
       const result = loadManifest(testDir)
-      expect(result).not.toBeNull()
-      expect(result?.instructions).toEqual([])
+      expect(result.status).toBe("found")
+      if (result.status === "found") {
+        expect(result.manifest.instructions).toEqual([])
+      }
     })
 
-    test("returns null for non-.md instructions", () => {
+    test("returns invalid for non-.md instructions", () => {
       const manifestPath = join(testDir, "manifest.json")
       writeFileSync(
         manifestPath,
@@ -246,7 +253,7 @@ describe("manifest", () => {
       )
 
       const result = loadManifest(testDir)
-      expect(result).toBeNull()
+      expect(result.status).toBe("invalid")
     })
   })
 })
