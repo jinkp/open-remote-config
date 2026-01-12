@@ -5,15 +5,11 @@ import * as os from "os"
 import {
   getInstallPath,
   getSymlinkPath,
-  createSkillInstall,
   createSkillSymlink,
-  createInstallsForRepo,
   createSymlinksForRepo,
-  getExistingInstalls,
   getExistingSymlinks,
   cleanupStaleInstalls,
   cleanupStaleSymlinks,
-  ensurePluginsDir,
   type InstallMethod,
   type InstallResult,
 } from "./install"
@@ -24,7 +20,6 @@ describe("install", () => {
   // Use temp directories for testing
   let testPluginsDir: string
   let testSourceDir: string
-  let originalPluginsDir: string
 
   // Helper to create a test skill directory with SKILL.md
   function createTestSkillDir(name: string): string {
@@ -58,10 +53,6 @@ describe("install", () => {
   beforeEach(() => {
     testPluginsDir = fs.mkdtempSync(path.join(os.tmpdir(), "test-plugins-"))
     testSourceDir = fs.mkdtempSync(path.join(os.tmpdir(), "test-source-"))
-    
-    // Store original and override for tests
-    // Note: This is a workaround since we can't easily inject the plugins dir
-    // In real tests we'd need dependency injection or module mocking
   })
 
   afterEach(() => {
