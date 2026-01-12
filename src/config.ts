@@ -2,6 +2,7 @@ import { z } from "zod"
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
+import { logError } from "./logging"
 
 /** Configuration file name */
 const CONFIG_FILENAME = "remote-config.json"
@@ -194,7 +195,7 @@ export function loadConfigWithLocation(): ConfigLoadResult {
         const result = RemoteSkillsConfigSchema.safeParse(parsed)
         
         if (!result.success) {
-          console.error(`[remote-config] Invalid configuration in ${configPath}:`, result.error.format())
+          logError(`Invalid configuration in ${configPath}: ${JSON.stringify(result.error.format())}`)
           continue
         }
         
@@ -203,7 +204,7 @@ export function loadConfigWithLocation(): ConfigLoadResult {
         
         return { config: result.data, configDir }
       } catch (error) {
-        console.error(`[remote-config] Error reading ${configPath}:`, error)
+        logError(`Error reading ${configPath}: ${error}`)
         continue
       }
     }
@@ -227,7 +228,7 @@ export function parseConfig(config: unknown): RemoteSkillsConfig {
   const result = RemoteSkillsConfigSchema.safeParse(config)
   
   if (!result.success) {
-    console.error("[remote-config] Invalid configuration:", result.error.format())
+    logError(`Invalid configuration: ${JSON.stringify(result.error.format())}`)
     return DEFAULT_CONFIG
   }
   

@@ -92,3 +92,12 @@ export function logError(message: string): void {
 export function logDebug(message: string): void {
   writeLog("DEBUG", message)
 }
+
+/**
+ * Log a WARN level message to the log file
+ * 
+ * @param message Message to log
+ */
+export function logWarn(message: string): void {
+  writeLog("WARN", message)
+}

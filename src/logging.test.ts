@@ -2,7 +2,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { existsSync, readFileSync, rmSync, mkdtempSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
-import { log, logError, logDebug, setLogDir, resetLogDir } from "./logging"
+import { log, logError, logDebug, logWarn, setLogDir, resetLogDir } from "./logging"
 
 describe("logging", () => {
   let tempDir: string
@@ -75,6 +75,18 @@ describe("logging", () => {
       expect(content).toContain("[DEBUG]")
       expect(content).toContain("[remote-config]")
       expect(content).toContain("debug info")
+    })
+  })
+
+  describe("logWarn", () => {
+    test("writes WARN level message to log file", () => {
+      logWarn("warning message")
+      
+      expect(existsSync(logFile)).toBe(true)
+      const content = readFileSync(logFile, "utf-8")
+      expect(content).toContain("[WARN]")
+      expect(content).toContain("[remote-config]")
+      expect(content).toContain("warning message")
     })
   })
 

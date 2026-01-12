@@ -7,6 +7,7 @@ import { AgentConfigSchema, type AgentInfo } from "./agent"
 import { CommandConfigSchema, type CommandInfo } from "./command"
 import type { PluginInfo } from "./plugin-info"
 import { discoverInstructions, type InstructionInfo } from "./instruction"
+import { log, logError, logWarn } from "./logging"
 
 /** Base directory for cloned repositories */
 const CACHE_BASE = path.join(
@@ -274,7 +275,7 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
     // Check depth limit
     if (depth > DISCOVERY_LIMITS.maxDepth) {
       if (!limitsWarned) {
-        console.warn(`[remote-config] Skipping deep directories (max depth: ${DISCOVERY_LIMITS.maxDepth})`)
+        logWarn(`Skipping deep directories (max depth: ${DISCOVERY_LIMITS.maxDepth})`)
         limitsWarned = true
       }
       return
@@ -283,7 +284,7 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
     // Check file count limit
     if (filesProcessed >= DISCOVERY_LIMITS.maxFiles) {
       if (!limitsWarned) {
-        console.warn(`[remote-config] Stopping discovery (max files: ${DISCOVERY_LIMITS.maxFiles})`)
+        logWarn(`Stopping discovery (max files: ${DISCOVERY_LIMITS.maxFiles})`)
         limitsWarned = true
       }
       return
@@ -304,7 +305,7 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
         try {
           const stats = fs.statSync(fullPath)
           if (stats.size > DISCOVERY_LIMITS.maxFileSize) {
-            console.warn(`[remote-config] Skipping large file (${Math.round(stats.size / 1024)}KB): ${entry.name}`)
+            logWarn(`Skipping large file (${Math.round(stats.size / 1024)}KB): ${entry.name}`)
             continue
           }
           
@@ -315,7 +316,7 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
             agents.push(parsed)
           }
         } catch (err) {
-          console.error(`[remote-config] Failed to parse agent ${fullPath}:`, err)
+          logError(`Failed to parse agent ${fullPath}: ${err}`)
         }
       }
     }
@@ -357,7 +358,7 @@ function parseAgentMarkdown(
   } catch (err) {
     // Log with repo-relative path to avoid exposing absolute paths
     const relativeToRepo = path.relative(path.dirname(agentDir), filePath)
-    console.error(`[remote-config] Failed to parse frontmatter in ${relativeToRepo}:`, err)
+    logError(`Failed to parse frontmatter in ${relativeToRepo}: ${err}`)
     return null
   }
   
@@ -376,7 +377,7 @@ function parseAgentMarkdown(
   // Allow: alphanumeric, hyphens, underscores, and forward slashes (for nesting)
   if (!/^[a-zA-Z0-9_/-]+$/.test(agentName)) {
     const relativeToRepo = path.relative(path.dirname(agentDir), filePath)
-    console.warn(`[remote-config] Skipping agent with invalid name characters: ${relativeToRepo}`)
+    logWarn(`Skipping agent with invalid name characters: ${relativeToRepo}`)
     return null
   }
   
@@ -389,8 +390,7 @@ function parseAgentMarkdown(
   // Validate against schema
   const result = AgentConfigSchema.safeParse(rawConfig)
   if (!result.success) {
-    console.error(`[remote-config] Invalid agent config in ${filePath}:`, 
-      result.error.format())
+    logError(`Invalid agent config in ${filePath}: ${JSON.stringify(result.error.format())}`)
     return null
   }
   
@@ -433,7 +433,7 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
     // Check depth limit
     if (depth > DISCOVERY_LIMITS.maxDepth) {
       if (!limitsWarned) {
-        console.warn(`[remote-config] Skipping deep directories (max depth: ${DISCOVERY_LIMITS.maxDepth})`)
+        logWarn(`Skipping deep directories (max depth: ${DISCOVERY_LIMITS.maxDepth})`)
         limitsWarned = true
       }
       return
@@ -442,7 +442,7 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
     // Check file count limit
     if (filesProcessed >= DISCOVERY_LIMITS.maxFiles) {
       if (!limitsWarned) {
-        console.warn(`[remote-config] Stopping discovery (max files: ${DISCOVERY_LIMITS.maxFiles})`)
+        logWarn(`Stopping discovery (max files: ${DISCOVERY_LIMITS.maxFiles})`)
         limitsWarned = true
       }
       return
@@ -463,7 +463,7 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
         try {
           const stats = fs.statSync(fullPath)
           if (stats.size > DISCOVERY_LIMITS.maxFileSize) {
-            console.warn(`[remote-config] Skipping large file (${Math.round(stats.size / 1024)}KB): ${entry.name}`)
+            logWarn(`Skipping large file (${Math.round(stats.size / 1024)}KB): ${entry.name}`)
             continue
           }
           
@@ -474,7 +474,7 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
             commands.push(parsed)
           }
         } catch (err) {
-          console.error(`[remote-config] Failed to parse command ${fullPath}:`, err)
+          logError(`Failed to parse command ${fullPath}: ${err}`)
         }
       }
     }
@@ -516,7 +516,7 @@ function parseCommandMarkdown(
   } catch (err) {
     // Log with repo-relative path to avoid exposing absolute paths
     const relativeToRepo = path.relative(path.dirname(commandDir), filePath)
-    console.error(`[remote-config] Failed to parse frontmatter in ${relativeToRepo}:`, err)
+    logError(`Failed to parse frontmatter in ${relativeToRepo}: ${err}`)
     return null
   }
   
@@ -533,7 +533,7 @@ function parseCommandMarkdown(
   // Allow: alphanumeric, hyphens, underscores, and forward slashes (for nesting)
   if (!/^[a-zA-Z0-9_/-]+$/.test(commandName)) {
     const relativeToRepo = path.relative(path.dirname(commandDir), filePath)
-    console.warn(`[remote-config] Skipping command with invalid name characters: ${relativeToRepo}`)
+    logWarn(`Skipping command with invalid name characters: ${relativeToRepo}`)
     return null
   }
   
@@ -547,8 +547,7 @@ function parseCommandMarkdown(
   // Validate against schema
   const result = CommandConfigSchema.safeParse(rawConfig)
   if (!result.success) {
-    console.error(`[remote-config] Invalid command config in ${filePath}:`, 
-      result.error.format())
+    logError(`Invalid command config in ${filePath}: ${JSON.stringify(result.error.format())}`)
     return null
   }
   
@@ -592,7 +591,7 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
     // Check depth limit
     if (depth > DISCOVERY_LIMITS.maxDepth) {
       if (!limitsWarned) {
-        console.warn(`[remote-config] Skipping deep directories (max depth: ${DISCOVERY_LIMITS.maxDepth})`)
+        logWarn(`Skipping deep directories (max depth: ${DISCOVERY_LIMITS.maxDepth})`)
         limitsWarned = true
       }
       return
@@ -601,7 +600,7 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
     // Check file count limit
     if (filesProcessed >= DISCOVERY_LIMITS.maxFiles) {
       if (!limitsWarned) {
-        console.warn(`[remote-config] Stopping discovery (max files: ${DISCOVERY_LIMITS.maxFiles})`)
+        logWarn(`Stopping discovery (max files: ${DISCOVERY_LIMITS.maxFiles})`)
         limitsWarned = true
       }
       return
@@ -622,7 +621,7 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
         try {
           const stats = fs.statSync(fullPath)
           if (stats.size > DISCOVERY_LIMITS.maxFileSize) {
-            console.warn(`[remote-config] Skipping large file (${Math.round(stats.size / 1024)}KB): ${entry.name}`)
+            logWarn(`Skipping large file (${Math.round(stats.size / 1024)}KB): ${entry.name}`)
             continue
           }
           
@@ -640,7 +639,7 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
           // Allow: alphanumeric, hyphens, underscores
           if (!/^[a-zA-Z0-9_-]+$/.test(pluginName)) {
             const relativeToRepo = path.relative(path.dirname(pluginDir), fullPath)
-            console.warn(`[remote-config] Skipping plugin with invalid name characters: ${relativeToRepo}`)
+            logWarn(`Skipping plugin with invalid name characters: ${relativeToRepo}`)
             continue
           }
           
@@ -651,7 +650,7 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
             extension: ext,
           })
         } catch (err) {
-          console.error(`[remote-config] Failed to process plugin ${fullPath}:`, err)
+          logError(`Failed to process plugin ${fullPath}: ${err}`)
         }
       }
     }

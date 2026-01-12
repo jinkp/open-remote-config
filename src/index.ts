@@ -17,56 +17,10 @@ import {
   getPluginSymlinkName,
 } from "./plugin-symlinks"
 import type { PluginInfo } from "./plugin-info"
-import { appendFileSync, mkdirSync } from "fs"
-import { join } from "path"
-import { homedir } from "os"
-
-/** Prefix for all log messages */
-const LOG_PREFIX = "[remote-config]"
-
-/** Log file path */
-const LOG_DIR = join(homedir(), ".cache", "opencode", "remote-config")
-const LOG_FILE = join(LOG_DIR, "plugin.log")
+import { log, logError } from "./logging"
 
 /** Guard to prevent duplicate initialization within the same process */
 let initialized = false
-
-/**
- * Get current timestamp for log entries
- */
-function timestamp(): string {
-  return new Date().toISOString()
-}
-
-/**
- * Write to log file
- */
-function writeLog(level: string, message: string): void {
-  try {
-    mkdirSync(LOG_DIR, { recursive: true })
-    appendFileSync(LOG_FILE, `${timestamp()} [${level}] ${message}\n`)
-  } catch {
-    // Ignore log file errors
-  }
-}
-
-/**
- * Log a message with the plugin prefix
- */
-function log(message: string): void {
-  const fullMessage = `${LOG_PREFIX} ${message}`
-  console.log(fullMessage)
-  writeLog("INFO", message)
-}
-
-/**
- * Log an error with the plugin prefix
- */
-function logError(message: string): void {
-  const fullMessage = `${LOG_PREFIX} ${message}`
-  console.error(fullMessage)
-  writeLog("ERROR", message)
-}
 
 /**
  * Sync all configured repositories and create symlinks
