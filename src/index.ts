@@ -18,7 +18,7 @@ import {
   getPluginSymlinkName,
 } from "./plugin-install"
 import type { PluginInfo } from "./plugin-info"
-import { log, logError } from "./logging"
+import { log, logError, logDebug } from "./logging"
 
 /** Guard to prevent duplicate initialization within the same process */
 let initialized = false
@@ -242,7 +242,9 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
 
   // Log the installation method being used
   if (pluginConfig.installMethod === "copy") {
-    log("Using copy mode for skill installation")
+    logDebug("Using copy mode for skill/plugin installation")
+  } else {
+    logDebug("Using symlink mode for skill/plugin installation")
   }
 
   // Ensure the _plugins directory exists
