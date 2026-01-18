@@ -37,7 +37,7 @@ Then add the plugin to your OpenCode config (`~/.config/opencode/opencode.json` 
 
 ```json
 {
-  "plugins": ["@jgordijn/opencode-remote-config"]
+  "plugin": ["@jgordijn/opencode-remote-config"]
 }
 ```
 
