@@ -37,7 +37,7 @@ Then add the plugin to your OpenCode config (`~/.config/opencode/opencode.json` 
 
 ```json
 {
-  "plugins": ["@jgordijn/opencode-remote-config"]
+  "plugin": ["@jgordijn/opencode-remote-config"]
 }
 ```
 
@@ -299,7 +299,7 @@ This section contains instructions for LLM agents helping users set up the openc
    Then add to OpenCode config (`~/.config/opencode/opencode.json`):
    ```json
    {
-     "plugins": ["@jgordijn/opencode-remote-config"]
+     "plugin": ["@jgordijn/opencode-remote-config"]
    }
    ```
 
