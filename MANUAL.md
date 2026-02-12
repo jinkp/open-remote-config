@@ -5,10 +5,11 @@ Plugin para sincronizar skills, agents, commands e instructions desde repositori
 ## Tabla de Contenidos
 
 - [Requisitos](#requisitos)
-- [Instalacion Rapida (Recomendada)](#instalacion-rapida-recomendada)
+- [Instalacion con Script](#instalacion-con-script)
 - [Instalacion Manual](#instalacion-manual)
 - [Verificar Instalacion](#verificar-instalacion)
 - [Configuracion](#configuracion)
+- [Nombres de Skills](#nombres-de-skills)
 - [Comandos del Plugin](#comandos-del-plugin)
 - [Desinstalacion](#desinstalacion)
 - [Troubleshooting](#troubleshooting)
@@ -17,67 +18,92 @@ Plugin para sincronizar skills, agents, commands e instructions desde repositori
 
 ## Requisitos
 
-- [Bun](https://bun.sh/) >= 1.0.0 o [Node.js](https://nodejs.org/) >= 18
+- [Bun](https://bun.sh/) >= 1.0.0
 - [OpenCode](https://opencode.ai/) instalado
 - Git (para clonar repositorios remotos)
 
 ---
 
-## Instalacion Rapida (Recomendada)
+## Instalacion con Script
 
-Ejecuta el script de setup en la raiz de tu proyecto:
+### Paso 1: Instalar el plugin globalmente
 
 ```bash
-# Opcion 1: Ejecutar directamente
-bunx --bun https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/dist/setup.js
-
-# Opcion 2: Instalar globalmente primero
 bun add -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
-opencode-remote-config-setup
+```
+
+### Paso 2: Ejecutar el setup en tu proyecto
+
+**Windows:**
+```bash
+bun C:\Users\TU_USUARIO\.bun\install\global\node_modules\opencode-remote-config\dist\setup.js
+```
+
+**Linux/macOS:**
+```bash
+bun ~/.bun/install/global/node_modules/opencode-remote-config/dist/setup.js
 ```
 
 El script automaticamente:
-1. Crea la carpeta `.opencode` si no existe
-2. Agrega el plugin a `.opencode/package.json`
-3. Crea un `remote-config.json` de ejemplo
-4. Agrega el plugin a `opencode.json`
-5. Ejecuta `bun install`
+1. Crea `.opencode/` si no existe
+2. Clona el plugin a `.opencode/node_modules/` (sin `.git`)
+3. Crea `opencode.json` con `"plugin": ["./node_modules/opencode-remote-config"]`
+4. Crea `remote-config.json` de ejemplo
+5. Instala dependencias del plugin
 
-**Despues de ejecutar el setup:**
-1. Edita `.opencode/remote-config.json` con tus repositorios
-2. Inicia OpenCode
+### Paso 3: Configurar repositorios
+
+Edita `.opencode/remote-config.json`:
+
+```json
+{
+  "repositories": [
+    {
+      "url": "https://bitbucket.org/tu-org/skills.git",
+      "ref": "main"
+    }
+  ],
+  "installMethod": "copy",
+  "logLevel": "info"
+}
+```
+
+### Paso 4: Iniciar OpenCode
+
+```bash
+opencode
+```
 
 ---
 
 ## Instalacion Manual
 
-Si prefieres instalar manualmente, sigue estos pasos:
+Si prefieres instalar sin el script:
 
-### Paso 1: Crear estructura de carpetas
-
-```bash
-mkdir .opencode
-cd .opencode
-```
-
-### Paso 2: Crear package.json
-
-Crea `.opencode/package.json`:
-
-```json
-{
-  "dependencies": {
-    "opencode-remote-config": "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
-  }
-}
-```
-
-### Paso 3: Instalar dependencias
+### Paso 1: Crear estructura
 
 ```bash
+mkdir -p .opencode/node_modules
+cd .opencode/node_modules
+git clone --depth 1 https://bitbucket.org/softrestaurant-team/opencode-remote-config.git opencode-remote-config
+```
+
+### Paso 2: Remover .git (evita repos anidados)
+
+```bash
+# Windows
+rmdir /s /q opencode-remote-config\.git
+
+# Linux/macOS
+rm -rf opencode-remote-config/.git
+```
+
+### Paso 3: Instalar dependencias del plugin
+
+```bash
+cd opencode-remote-config
 bun install
-# o
-npm install
+cd ../..
 ```
 
 ### Paso 4: Crear opencode.json
@@ -87,9 +113,11 @@ Crea `.opencode/opencode.json`:
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-remote-config"]
+  "plugin": ["./node_modules/opencode-remote-config"]
 }
 ```
+
+**Nota:** Usar ruta relativa `./node_modules/...` es importante.
 
 ### Paso 5: Crear remote-config.json
 
@@ -99,7 +127,7 @@ Crea `.opencode/remote-config.json`:
 {
   "repositories": [
     {
-      "url": "https://bitbucket.org/tu-org/tu-repo-skills.git",
+      "url": "https://bitbucket.org/tu-org/skills.git",
       "ref": "main"
     }
   ],
@@ -108,46 +136,23 @@ Crea `.opencode/remote-config.json`:
 }
 ```
 
-### Paso 6: Iniciar OpenCode
-
-```bash
-opencode
-```
-
 ---
 
 ## Verificar Instalacion
 
-### 1. Verificar en package.json
+### 1. Verificar estructura
 
 ```bash
 # Windows
-type .opencode\package.json | findstr "opencode-remote-config"
+dir .opencode\node_modules\opencode-remote-config
 
 # Linux/macOS
-cat .opencode/package.json | grep "opencode-remote-config"
+ls .opencode/node_modules/opencode-remote-config
 ```
 
-Deberia mostrar algo como:
-```json
-"opencode-remote-config": "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
-```
+### 2. Verificar logs
 
-### 2. Verificar en node_modules
-
-```bash
-# Windows
-type .opencode\node_modules\opencode-remote-config\package.json | findstr "version"
-
-# Linux/macOS
-cat .opencode/node_modules/opencode-remote-config/package.json | grep "version"
-```
-
-Deberia mostrar: `"version": "0.5.0"` o superior.
-
-### 3. Verificar logs del plugin
-
-Despues de ejecutar OpenCode, revisa el log:
+Despues de iniciar OpenCode:
 
 ```bash
 # Windows
@@ -161,135 +166,115 @@ cat ~/.cache/opencode/remote-config/plugin.log
 
 ## Configuracion
 
-### Configuracion por Proyecto
+### Archivo de Configuracion
 
-Crea el archivo `.opencode/remote-config.json` en la raiz de tu proyecto:
-
-```json
-{
-  "repositories": [
-    {
-      "url": "https://bitbucket.org/tu-org/skills.git",
-      "ref": "main"
-    }
-  ],
-  "installMethod": "copy",
-  "logLevel": "info"
-}
-```
-
-Luego registra el plugin en `.opencode/opencode.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-remote-config"]
-}
-```
-
-**Nota:** La clave es `"plugin"` (singular), no `"plugins"`.
-
-### Configuracion Global
-
-La configuracion global aplica a todos los proyectos donde no exista configuracion local.
-
-**Windows:**
-```
-%USERPROFILE%\.config\opencode\remote-config.json
-```
-
-**Linux/macOS:**
-```
-~/.config/opencode/remote-config.json
-```
-
-Ejemplo de configuracion global:
+El plugin lee `.opencode/remote-config.json`:
 
 ```json
 {
   "repositories": [
     {
       "url": "https://bitbucket.org/tu-org/skills.git",
-      "ref": "main"
-    },
-    {
-      "url": "git@bitbucket.org:tu-org/shared-agents.git",
       "ref": "main",
-      "agents": "*",
-      "skills": { "exclude": ["deprecated-skill"] }
+      "skills": { "include": ["product-owner-feature-analizar"] }
     }
   ],
   "installMethod": "copy",
-  "logLevel": "info"
+  "logLevel": "debug"
 }
 ```
 
-### Opciones de Configuracion
+### Opciones Globales
 
 | Opcion | Tipo | Default | Descripcion |
 |--------|------|---------|-------------|
-| `repositories` | array | `[]` | Lista de repositorios a sincronizar |
-| `installMethod` | `"link"` \| `"copy"` | `"copy"` (Windows) / `"link"` (otros) | Metodo de instalacion |
-| `logLevel` | `"error"` \| `"warn"` \| `"info"` \| `"debug"` | `"info"` | Nivel de detalle en logs |
+| `repositories` | array | `[]` | Lista de repositorios |
+| `installMethod` | `"link"` \| `"copy"` | `"copy"` (Windows) | Metodo de instalacion |
+| `logLevel` | `"error"` \| `"warn"` \| `"info"` \| `"debug"` | `"info"` | Nivel de logs |
 
 ### Opciones por Repositorio
 
 | Opcion | Tipo | Default | Descripcion |
 |--------|------|---------|-------------|
-| `url` | string | requerido | URL del repositorio (HTTPS o SSH) |
-| `ref` | string | branch default | Branch, tag o commit a usar |
-| `skills` | `"*"` \| `{include: [...]}` \| `{exclude: [...]}` | `"*"` | Filtro de skills |
-| `agents` | `"*"` \| `{include: [...]}` \| `{exclude: [...]}` | `"*"` | Filtro de agents |
-| `commands` | `"*"` \| `{include: [...]}` \| `{exclude: [...]}` | `"*"` | Filtro de commands |
-| `plugins` | `"*"` \| `{include: [...]}` \| `{exclude: [...]}` | `"*"` | Filtro de plugins |
-| `instructions` | `"*"` \| `{include: [...]}` \| `{exclude: [...]}` | `"*"` | Filtro de instructions |
+| `url` | string | requerido | URL del repositorio |
+| `ref` | string | default branch | Branch, tag o commit |
+| `skills` | `"*"` \| `{include:[...]}` \| `{exclude:[...]}` | `"*"` | Filtro de skills |
+| `agents` | `"*"` \| `{include:[...]}` \| `{exclude:[...]}` | `"*"` | Filtro de agents |
+| `commands` | `"*"` \| `{include:[...]}` \| `{exclude:[...]}` | `"*"` | Filtro de commands |
 
-### Ejemplos de Filtros
+---
 
+## Nombres de Skills
+
+**Importante:** El plugin convierte la estructura de carpetas a nombres con guiones.
+
+| Estructura de carpetas | Nombre del skill |
+|------------------------|------------------|
+| `skill/code-review/` | `code-review` |
+| `skill/architect/reviewer/` | `architect-reviewer` |
+| `skill/product-owner/feature-analizar/` | `product-owner-feature-analizar` |
+
+### En los filtros usa guiones, no slashes:
+
+**Correcto:**
 ```json
 {
-  "repositories": [
-    {
-      "url": "https://example.com/repo.git",
-      "skills": "*",
-      "agents": { "include": ["code-reviewer", "tester"] },
-      "commands": { "exclude": ["deprecated-cmd"] }
-    }
-  ]
+  "skills": { "include": ["product-owner-feature-analizar"] }
 }
+```
+
+**Incorrecto:**
+```json
+{
+  "skills": { "include": ["product-owner/feature-analizar"] }
+}
+```
+
+### Ver nombres disponibles
+
+Usa `logLevel: "debug"` y revisa el log:
+
+```
+[DISCOVER] Found skill: product-owner-feature-analizar
+[DISCOVER] Found skill: architect-code-reviewer
 ```
 
 ---
 
 ## Comandos del Plugin
 
-El plugin registra comandos que puedes usar dentro de OpenCode:
+Dentro de OpenCode:
 
 | Comando | Descripcion |
 |---------|-------------|
-| `/remote-sync` | Fuerza re-sincronizacion de todos los repositorios (borra cache y re-descarga) |
-| `/remote-clear` | Limpia el cache sin re-sincronizar (re-descarga al reiniciar OpenCode) |
-| `/remote-status` | Muestra estado del plugin y sesion actual |
-
-### Uso
-
-Dentro de OpenCode, escribe:
-
-```
-/remote-sync
-```
-
-Para forzar que el plugin descargue de nuevo todos los repositorios.
+| `/remote-sync` | Fuerza re-descarga de todos los repositorios |
+| `/remote-clear` | Limpia cache (re-descarga al reiniciar) |
+| `/remote-status` | Muestra estado del plugin |
 
 ---
 
 ## Desinstalacion
 
-### Desinstalar del proyecto
+### Limpiar del proyecto
 
 ```bash
-cd .opencode
-bun remove opencode-remote-config
+# Windows
+rmdir /s /q .opencode\node_modules\opencode-remote-config
+rmdir /s /q _plugins
+
+# Linux/macOS
+rm -rf .opencode/node_modules/opencode-remote-config
+rm -rf _plugins
+```
+
+### Limpiar cache global
+
+```bash
+# Windows
+rmdir /s /q %USERPROFILE%\.cache\opencode\remote-config
+
+# Linux/macOS
+rm -rf ~/.cache/opencode/remote-config
 ```
 
 ### Desinstalar global
@@ -298,111 +283,40 @@ bun remove opencode-remote-config
 bun remove -g opencode-remote-config
 ```
 
-### Limpiar archivos de configuracion
-
-```bash
-# Windows - Configuracion local
-rmdir /s /q .opencode
-
-# Windows - Configuracion global
-rmdir /s /q %USERPROFILE%\.config\opencode
-
-# Windows - Cache y logs
-rmdir /s /q %USERPROFILE%\.cache\opencode\remote-config
-
-# Linux/macOS - Configuracion local
-rm -rf .opencode
-
-# Linux/macOS - Configuracion global
-rm -rf ~/.config/opencode
-
-# Linux/macOS - Cache y logs
-rm -rf ~/.cache/opencode/remote-config
-```
-
-### Limpiar skills instalados
-
-Los skills se instalan en `_plugins/` dentro de tu proyecto:
-
-```bash
-# Windows
-rmdir /s /q _plugins
-
-# Linux/macOS
-rm -rf _plugins
-```
-
 ---
 
 ## Troubleshooting
 
+### Error: "BunInstallFailedError"
+
+OpenCode no encuentra el plugin. Verifica:
+
+1. Que `opencode.json` use ruta relativa:
+   ```json
+   { "plugin": ["./node_modules/opencode-remote-config"] }
+   ```
+
+2. Que el plugin este instalado en `.opencode/node_modules/`
+
+### Error: "Filtered skills: 27 -> 0"
+
+Los nombres de los filtros no coinciden. Recuerda:
+- Usa guiones (`-`), no slashes (`/`)
+- Usa `logLevel: "debug"` para ver los nombres reales
+
 ### El plugin no carga
 
-1. Verifica que el plugin este en `.opencode/opencode.json`:
-   ```json
-   { "plugin": ["opencode-remote-config"] }
-   ```
-   **Nota:** Es `"plugin"` (singular), no `"plugins"`.
+1. Verifica la ruta en `opencode.json`
+2. Verifica que exista `.opencode/remote-config.json`
+3. Revisa el log para errores
 
-2. Verifica que el plugin este instalado:
-   ```bash
-   type .opencode\node_modules\opencode-remote-config\package.json
-   ```
-
-3. Verifica que existe `remote-config.json` en `.opencode/`
-
-4. Revisa los logs:
-   ```bash
-   type %USERPROFILE%\.cache\opencode\remote-config\plugin.log
-   ```
-
-### Error "BunInstallFailedError"
-
-OpenCode no puede encontrar el plugin. Asegurate de:
-
-1. Tener el plugin en `.opencode/package.json`:
-   ```json
-   {
-     "dependencies": {
-       "opencode-remote-config": "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
-     }
-   }
-   ```
-
-2. Ejecutar `bun install` o `npm install` en la carpeta `.opencode`
-
-### Error de permisos en Windows (EPERM)
-
-El plugin usa `copy` por defecto en Windows. Si ves errores EPERM con symlinks:
-
-```json
-{
-  "installMethod": "copy"
-}
-```
-
-### Los skills no se sincronizan
-
-1. Verifica la URL del repositorio
-2. Verifica que tienes acceso al repositorio (credenciales Git)
-3. Usa `logLevel: "debug"` para ver detalles:
-   ```json
-   { "logLevel": "debug" }
-   ```
-
-### Conflicto con skills locales
-
-Si existe un skill local con el mismo nombre, el plugin lo omite. Revisa el log para ver skills omitidos:
-
-```
-[WARN] Conflict: 'skill-name' exists locally, skipping
-```
-
-### Forzar re-descarga de repositorios
-
-Usa el comando `/remote-sync` dentro de OpenCode, o manualmente:
+### Forzar re-descarga
 
 ```bash
+# Opcion 1: Comando dentro de OpenCode
+/remote-sync
+
+# Opcion 2: Borrar cache manualmente
 # Windows
 rmdir /s /q %USERPROFILE%\.cache\opencode\remote-config\repos
 
@@ -410,38 +324,28 @@ rmdir /s /q %USERPROFILE%\.cache\opencode\remote-config\repos
 rm -rf ~/.cache/opencode/remote-config/repos
 ```
 
-Luego reinicia OpenCode.
-
 ---
 
-## Estructura de un Repositorio de Skills
+## Estructura de Archivos
+
+Despues de la instalacion:
 
 ```
-mi-repo/
-  skill/
-    mi-skill/
-      SKILL.md
-      prompt.md
-  agent/
-    code-reviewer.md
-  command/
-    deploy.md
-  plugin/
-    notify.ts
-  manifest.json
-```
-
-### manifest.json (opcional)
-
-```json
-{
-  "instructions": ["README.md", "docs/setup.md"]
-}
+tu-proyecto/
+├── .opencode/
+│   ├── node_modules/
+│   │   └── opencode-remote-config/    # Plugin (sin .git)
+│   ├── opencode.json                   # plugin: ["./node_modules/..."]
+│   └── remote-config.json              # Tus repositorios
+├── _plugins/                           # Skills instalados (creado por el plugin)
+│   └── nombre-repo/
+│       └── nombre-skill/
+└── ... (tu codigo)
 ```
 
 ---
 
-## Soporte
+## Links
 
-Para reportar problemas o sugerencias:
-https://bitbucket.org/softrestaurant-team/opencode-remote-config/issues
+- [SKILLS.md](./SKILLS.md) - Como crear repositorios de skills
+- [Repositorio](https://bitbucket.org/softrestaurant-team/opencode-remote-config)
