@@ -2,47 +2,11 @@
 // @bun
 
 // src/setup.ts
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs";
 import { join } from "path";
 var {$ } = globalThis.Bun;
-import { Readable } from "stream";
-import { createWriteStream } from "fs";
-import { pipeline } from "stream/promises";
 var PLUGIN_NAME = "opencode-remote-config";
-var PLUGIN_ZIP_URL = "https://bitbucket.org/softrestaurant-team/opencode-remote-config/get/main.zip";
-async function downloadFile(url, destPath) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to download: ${response.statusText}`);
-  }
-  const fileStream = createWriteStream(destPath);
-  await pipeline(Readable.fromWeb(response.body), fileStream);
-}
-async function extractZip(zipPath, destDir) {
-  const isWindows = process.platform === "win32";
-  if (isWindows) {
-    await $`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`;
-  } else {
-    await $`unzip -o ${zipPath} -d ${destDir}`;
-  }
-}
-function copyDirRecursive(src, dest) {
-  if (!existsSync(dest)) {
-    mkdirSync(dest, { recursive: true });
-  }
-  const entries = readdirSync(src, { withFileTypes: true });
-  for (const entry of entries) {
-    const srcPath = join(src, entry.name);
-    const destPath = join(dest, entry.name);
-    if (entry.name === ".git")
-      continue;
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath);
-    } else {
-      copyFileSync(srcPath, destPath);
-    }
-  }
-}
+var PLUGIN_REPO_URL = "https://bitbucket.org/softrestaurant-team/opencode-remote-config.git";
 async function main() {
   const cwd = process.cwd();
   const opencodeDir = join(cwd, ".opencode");
@@ -57,31 +21,20 @@ async function main() {
     console.log("\u2713 .opencode directory exists");
   }
   if (!existsSync(pluginDir)) {
-    console.log("\uD83D\uDCE5 Downloading plugin from Bitbucket...");
-    const tempDir = join(opencodeDir, "_temp");
-    const zipPath = join(opencodeDir, "plugin.zip");
+    console.log("\uD83D\uDCE5 Cloning plugin from Bitbucket...");
     try {
-      mkdirSync(tempDir, { recursive: true });
       mkdirSync(nodeModulesDir, { recursive: true });
-      await downloadFile(PLUGIN_ZIP_URL, zipPath);
-      console.log("\u2713 Downloaded plugin");
-      await extractZip(zipPath, tempDir);
-      console.log("\u2713 Extracted plugin");
-      const extractedFolders = readdirSync(tempDir).filter((f) => statSync(join(tempDir, f)).isDirectory());
-      if (extractedFolders.length === 0) {
-        throw new Error("No folder found in zip");
+      await $`git clone --depth 1 ${PLUGIN_REPO_URL} ${pluginDir}`.quiet();
+      console.log("\u2713 Cloned plugin");
+      const gitDir = join(pluginDir, ".git");
+      if (existsSync(gitDir)) {
+        rmSync(gitDir, { recursive: true, force: true });
+        console.log("\u2713 Removed .git folder");
       }
-      const extractedFolder = join(tempDir, extractedFolders[0]);
-      copyDirRecursive(extractedFolder, pluginDir);
-      console.log("\u2713 Installed plugin to node_modules");
-      rmSync(tempDir, { recursive: true, force: true });
-      rmSync(zipPath, { force: true });
     } catch (err) {
-      if (existsSync(tempDir))
-        rmSync(tempDir, { recursive: true, force: true });
-      if (existsSync(zipPath))
-        rmSync(zipPath, { force: true });
-      throw err;
+      if (existsSync(pluginDir))
+        rmSync(pluginDir, { recursive: true, force: true });
+      throw new Error(`Failed to clone plugin: ${err instanceof Error ? err.message : err}`);
     }
   } else {
     console.log("\u2713 Plugin already installed");

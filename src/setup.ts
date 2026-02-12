@@ -8,64 +8,19 @@
  * 
  * This script:
  * 1. Creates .opencode directory if needed
- * 2. Downloads the plugin from Bitbucket (zip)
- * 3. Extracts it to node_modules (without .git)
+ * 2. Clones the plugin from Bitbucket (shallow clone)
+ * 3. Removes .git folder to avoid nested repos
  * 4. Creates a default remote-config.json if needed
  * 5. Updates opencode.json to include the plugin
  * 6. Installs plugin dependencies
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, statSync } from "fs"
-import { join, basename } from "path"
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "fs"
+import { join } from "path"
 import { $ } from "bun"
-import { Readable } from "stream"
-import { createWriteStream } from "fs"
-import { pipeline } from "stream/promises"
 
 const PLUGIN_NAME = "opencode-remote-config"
-const PLUGIN_ZIP_URL = "https://bitbucket.org/softrestaurant-team/opencode-remote-config/get/main.zip"
-
-async function downloadFile(url: string, destPath: string): Promise<void> {
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Failed to download: ${response.statusText}`)
-  }
-  const fileStream = createWriteStream(destPath)
-  await pipeline(Readable.fromWeb(response.body as any), fileStream)
-}
-
-async function extractZip(zipPath: string, destDir: string): Promise<void> {
-  // Use PowerShell on Windows to extract zip
-  const isWindows = process.platform === "win32"
-  
-  if (isWindows) {
-    await $`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`
-  } else {
-    await $`unzip -o ${zipPath} -d ${destDir}`
-  }
-}
-
-function copyDirRecursive(src: string, dest: string): void {
-  if (!existsSync(dest)) {
-    mkdirSync(dest, { recursive: true })
-  }
-  
-  const entries = readdirSync(src, { withFileTypes: true })
-  
-  for (const entry of entries) {
-    const srcPath = join(src, entry.name)
-    const destPath = join(dest, entry.name)
-    
-    // Skip .git directory
-    if (entry.name === ".git") continue
-    
-    if (entry.isDirectory()) {
-      copyDirRecursive(srcPath, destPath)
-    } else {
-      copyFileSync(srcPath, destPath)
-    }
-  }
-}
+const PLUGIN_REPO_URL = "https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
 
 async function main() {
   const cwd = process.cwd()
@@ -83,50 +38,29 @@ async function main() {
     console.log("✓ .opencode directory exists")
   }
   
-  // 2. Download and extract plugin
+  // 2. Clone plugin (shallow clone)
   if (!existsSync(pluginDir)) {
-    console.log("📥 Downloading plugin from Bitbucket...")
-    
-    const tempDir = join(opencodeDir, "_temp")
-    const zipPath = join(opencodeDir, "plugin.zip")
+    console.log("📥 Cloning plugin from Bitbucket...")
     
     try {
-      // Create temp directory
-      mkdirSync(tempDir, { recursive: true })
+      // Create node_modules directory
       mkdirSync(nodeModulesDir, { recursive: true })
       
-      // Download zip
-      await downloadFile(PLUGIN_ZIP_URL, zipPath)
-      console.log("✓ Downloaded plugin")
+      // Shallow clone
+      await $`git clone --depth 1 ${PLUGIN_REPO_URL} ${pluginDir}`.quiet()
+      console.log("✓ Cloned plugin")
       
-      // Extract zip
-      await extractZip(zipPath, tempDir)
-      console.log("✓ Extracted plugin")
-      
-      // Find extracted folder (Bitbucket adds a prefix)
-      const extractedFolders = readdirSync(tempDir).filter(f => 
-        statSync(join(tempDir, f)).isDirectory()
-      )
-      
-      if (extractedFolders.length === 0) {
-        throw new Error("No folder found in zip")
+      // Remove .git folder to avoid nested repo issues
+      const gitDir = join(pluginDir, ".git")
+      if (existsSync(gitDir)) {
+        rmSync(gitDir, { recursive: true, force: true })
+        console.log("✓ Removed .git folder")
       }
-      
-      const extractedFolder = join(tempDir, extractedFolders[0])
-      
-      // Copy to node_modules (without .git)
-      copyDirRecursive(extractedFolder, pluginDir)
-      console.log("✓ Installed plugin to node_modules")
-      
-      // Cleanup
-      rmSync(tempDir, { recursive: true, force: true })
-      rmSync(zipPath, { force: true })
       
     } catch (err) {
       // Cleanup on error
-      if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true })
-      if (existsSync(zipPath)) rmSync(zipPath, { force: true })
-      throw err
+      if (existsSync(pluginDir)) rmSync(pluginDir, { recursive: true, force: true })
+      throw new Error(`Failed to clone plugin: ${err instanceof Error ? err.message : err}`)
     }
   } else {
     console.log("✓ Plugin already installed")
