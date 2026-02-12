@@ -72,7 +72,12 @@ bun C:\Users\TU_USUARIO\.bun\install\global\node_modules\opencode-remote-config\
 
 # Linux/macOS:
 bun ~/.bun/install/global/node_modules/opencode-remote-config/dist/setup.js
+
+# 3. Agregar .opencode al .gitignore de tu proyecto
+echo .opencode >> .gitignore
 ```
+
+**Importante:** Agrega `.opencode` a tu `.gitignore` para no subir el plugin y node_modules al repositorio.
 
 ## Configuracion Minima
 
