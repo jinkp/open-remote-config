@@ -1,6 +1,6 @@
 {
   "name": "opencode-remote-config",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "OpenCode plugin to sync skills, agents and commands from Git repositories",
   "repository": {
     "type": "git",
@@ -13,11 +13,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "opencode-remote-config-setup": "./dist/setup.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts src/setup.ts --outdir dist --target bun",
     "dev": "bun build src/index.ts --outdir dist --target bun --watch",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
