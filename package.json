@@ -34,7 +34,6 @@
   "author": "Jeroen Gordijn",
   "license": "MIT",
   "dependencies": {
-    "@jgordijn/opencode-remote-config": "git+https://joelkeb@bitbucket.org/softrestaurant-team/opencode-remote-config.git",
     "gray-matter": "^4.0.3",
     "zod": "^3.24.1"
   },
