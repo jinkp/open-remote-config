@@ -2,6 +2,25 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import * as fs from "fs"
 import * as path from "path"
 import * as os from "os"
+
+/** Check if we can create symlinks (Windows without admin rights cannot) */
+const canCreateSymlinks = (() => {
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "symlink-test-"))
+    const testFile = path.join(tmpDir, "test.txt")
+    const testLink = path.join(tmpDir, "test-link.txt")
+    fs.writeFileSync(testFile, "test")
+    fs.symlinkSync(testFile, testLink)
+    fs.rmSync(tmpDir, { recursive: true })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+/** Skip test if symlinks are not available */
+const testWithSymlinks = canCreateSymlinks ? test : test.skip
+
 import {
   getPluginSymlinkName,
   createPluginInstall,
@@ -126,7 +145,7 @@ describe("plugin-install", () => {
 
   describe("createPluginInstall", () => {
     describe("with link mode (default)", () => {
-      test("creates symlink successfully", () => {
+      testWithSymlinks("creates symlink successfully", () => {
         // Create a source file to link to
         const sourceFile = path.join(testSourceDir, "source.ts")
         fs.writeFileSync(sourceFile, `export default {}`)
@@ -152,7 +171,7 @@ describe("plugin-install", () => {
         expect(fs.readlinkSync(installPath)).toBe(sourceFile)
       })
 
-      test("replaces existing symlink", () => {
+      testWithSymlinks("replaces existing symlink", () => {
         const sourceFile1 = path.join(testSourceDir, "source1.ts")
         const sourceFile2 = path.join(testSourceDir, "source2.ts")
         fs.writeFileSync(sourceFile1, `export default { v: 1 }`)
@@ -182,7 +201,7 @@ describe("plugin-install", () => {
         expect(fs.readlinkSync(installPath)).toBe(sourceFile2)
       })
 
-      test("handles broken symlinks (race condition)", () => {
+      testWithSymlinks("handles broken symlinks (race condition)", () => {
         // This simulates the race condition where a symlink exists but points to a
         // now-nonexistent target (e.g., from a previous failed sync)
         const sourceFile1 = path.join(testSourceDir, "source1.ts")
@@ -219,7 +238,7 @@ describe("plugin-install", () => {
         expect(fs.existsSync(installPath)).toBe(true)
       })
 
-      test("reports error for non-existent source", () => {
+      testWithSymlinks("reports error for non-existent source", () => {
         const plugin: PluginInfo = {
           name: "missing",
           path: "/non/existent/file.ts",
@@ -296,7 +315,7 @@ describe("plugin-install", () => {
         expect(fs.readFileSync(installPath, "utf-8")).toBe(content2)
       })
 
-      test("replaces existing symlink with copy", () => {
+      testWithSymlinks("replaces existing symlink with copy", () => {
         const sourceFile1 = path.join(testSourceDir, "source1.ts")
         const sourceFile2 = path.join(testSourceDir, "source2.ts")
         const content2 = `export default { v: 2, copied: true }`
@@ -342,7 +361,7 @@ describe("plugin-install", () => {
   })
 
   describe("createPluginSymlink (deprecated)", () => {
-    test("creates symlink successfully", () => {
+    testWithSymlinks("creates symlink successfully", () => {
       // Create a source file to link to
       const sourceFile = path.join(testSourceDir, "source.ts")
       fs.writeFileSync(sourceFile, `export default {}`)
@@ -370,7 +389,7 @@ describe("plugin-install", () => {
   })
 
   describe("createPluginInstalls", () => {
-    test("installs multiple plugins with link mode", () => {
+    testWithSymlinks("installs multiple plugins with link mode", () => {
       const sourceFile1 = path.join(testSourceDir, "plugin1.ts")
       const sourceFile2 = path.join(testSourceDir, "plugin2.js")
       fs.writeFileSync(sourceFile1, `export default {}`)
@@ -549,7 +568,7 @@ describe("plugin-install", () => {
       expect(fs.existsSync(path.join(testPluginDir, "local-plugin.ts"))).toBe(true)
     })
 
-    test("removes both symlinks and regular files", () => {
+    testWithSymlinks("removes both symlinks and regular files", () => {
       const sourceFile = path.join(testSourceDir, "source.ts")
       fs.writeFileSync(sourceFile, "content")
       

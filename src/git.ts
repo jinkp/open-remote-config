@@ -1,17 +1,18 @@
 import { $ } from "bun"
 import * as path from "path"
 import * as fs from "fs"
+import { homedir } from "os"
 import matter from "gray-matter"
 import { getRepoId, shouldImport, type RepositoryConfig } from "./config"
 import { AgentConfigSchema, type AgentInfo } from "./agent"
 import { CommandConfigSchema, type CommandInfo } from "./command"
 import type { PluginInfo } from "./plugin-info"
 import { discoverInstructions, type InstructionInfo } from "./instruction"
-import { log, logError, logWarn } from "./logging"
+import { log, logError, logWarn, logDebug, logStart, logEnd, logEndWithTime } from "./logging"
 
 /** Base directory for cloned repositories */
 const CACHE_BASE = path.join(
-  process.env.HOME || "~",
+  homedir(),
   ".cache",
   "opencode",
   "remote-config",
@@ -86,6 +87,9 @@ export function isCloned(repoPath: string): boolean {
  * Clone a repository (full clone, not shallow)
  */
 async function cloneRepo(url: string, repoPath: string): Promise<void> {
+  const startTime = Date.now()
+  log(`Cloning ${url} to ${repoPath}`, "GIT")
+  
   // Ensure parent directory exists
   fs.mkdirSync(path.dirname(repoPath), { recursive: true })
   
@@ -98,15 +102,21 @@ async function cloneRepo(url: string, repoPath: string): Promise<void> {
     const output = [stderr, stdout].filter(Boolean).join("\n") || `exit code ${result.exitCode}`
     throw new Error(`git clone failed: ${output}`)
   }
+  
+  logEndWithTime("Clone completed", startTime, "GIT")
 }
 
 /**
  * Fetch updates and checkout a specific ref
  */
 async function fetchAndCheckout(repoPath: string, ref?: string): Promise<boolean> {
+  const startTime = Date.now()
+  logDebug(`Fetching updates for ${repoPath}`, "GIT")
+  
   // Get current commit before fetch
   const beforeCommit = await $`git -C ${repoPath} rev-parse HEAD`.quiet()
   const beforeHash = beforeCommit.stdout.toString().trim()
+  logDebug(`Current commit: ${beforeHash}`, "GIT")
   
   // Fetch all updates
   const fetchResult = await $`git -C ${repoPath} fetch --all --prune`.quiet()
@@ -118,6 +128,7 @@ async function fetchAndCheckout(repoPath: string, ref?: string): Promise<boolean
   }
   
   if (ref) {
+    log(`Checking out ref: ${ref}`, "GIT")
     // Checkout specific ref (branch, tag, or commit)
     const checkoutResult = await $`git -C ${repoPath} checkout ${ref}`.quiet()
     
@@ -131,6 +142,7 @@ async function fetchAndCheckout(repoPath: string, ref?: string): Promise<boolean
     // If it's a branch, pull latest
     const isBranch = await $`git -C ${repoPath} symbolic-ref -q HEAD`.quiet()
     if (isBranch.exitCode === 0) {
+      log("Pulling latest changes", "GIT")
       const pullResult = await $`git -C ${repoPath} pull --ff-only`.quiet()
       if (pullResult.exitCode !== 0) {
         const stderr = pullResult.stderr.toString().trim()
@@ -140,6 +152,7 @@ async function fetchAndCheckout(repoPath: string, ref?: string): Promise<boolean
       }
     }
   } else {
+    log("Checking out default branch", "GIT")
     // No ref specified, checkout default branch and pull
     const defaultBranch = await $`git -C ${repoPath} symbolic-ref refs/remotes/origin/HEAD`.quiet()
     if (defaultBranch.exitCode === 0) {
@@ -152,8 +165,16 @@ async function fetchAndCheckout(repoPath: string, ref?: string): Promise<boolean
   // Get commit after checkout
   const afterCommit = await $`git -C ${repoPath} rev-parse HEAD`.quiet()
   const afterHash = afterCommit.stdout.toString().trim()
+  const updated = beforeHash !== afterHash
   
-  return beforeHash !== afterHash
+  if (updated) {
+    log(`Updated from ${beforeHash.slice(0, 7)} to ${afterHash.slice(0, 7)}`, "GIT")
+  } else {
+    logDebug("No updates available", "GIT")
+  }
+  
+  logEndWithTime("Fetch and checkout completed", startTime, "GIT")
+  return updated
 }
 
 /**
@@ -177,6 +198,9 @@ async function getCurrentRef(repoPath: string): Promise<string> {
  * Looks for both "skill/" and "skills/" directories
  */
 export async function discoverSkills(repoPath: string): Promise<SkillInfo[]> {
+  const startTime = Date.now()
+  logDebug(`Discovering skills in ${repoPath}`, "DISCOVER")
+  
   const skills: SkillInfo[] = []
   
   // Support both "skill/" (OpenCode convention) and "skills/" (common alternative)
@@ -186,6 +210,7 @@ export async function discoverSkills(repoPath: string): Promise<SkillInfo[]> {
   }
   
   if (!fs.existsSync(skillDir)) {
+    logDebug(`No skills directory found in ${repoPath}`, "DISCOVER")
     return skills
   }
   
@@ -204,7 +229,8 @@ export async function discoverSkills(repoPath: string): Promise<SkillInfo[]> {
         if (fs.existsSync(skillMdPath)) {
           // Extract skill name from the directory path relative to skill/
           const relativePath = path.relative(skillDir, fullPath)
-          const skillName = relativePath.replace(/\//g, "-")
+          // Replace both forward and back slashes for cross-platform compatibility
+          const skillName = relativePath.replace(/[/\\]/g, "-")
           
           // Try to extract description from frontmatter
           let description: string | undefined
@@ -218,6 +244,7 @@ export async function discoverSkills(repoPath: string): Promise<SkillInfo[]> {
             // Ignore parse errors
           }
           
+          logDebug(`Found skill: ${skillName}`, "DISCOVER")
           skills.push({
             name: skillName,
             path: fullPath,
@@ -232,6 +259,8 @@ export async function discoverSkills(repoPath: string): Promise<SkillInfo[]> {
   }
   
   findSkills(skillDir)
+  log(`Found ${skills.length} skill(s): ${skills.map(s => s.name).join(", ") || "none"}`, "DISCOVER")
+  logEndWithTime("Skill discovery completed", startTime, "DISCOVER")
   return skills
 }
 
@@ -256,6 +285,9 @@ const DISCOVERY_LIMITS = {
  * - Max 10 levels of directory nesting
  */
 export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
+  const startTime = Date.now()
+  logDebug(`Discovering agents in ${repoPath}`, "DISCOVER")
+  
   const agents: AgentInfo[] = []
   let filesProcessed = 0
   let limitsWarned = false
@@ -267,6 +299,7 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
   }
   
   if (!fs.existsSync(agentDir)) {
+    logDebug(`No agents directory found in ${repoPath}`, "DISCOVER")
     return agents
   }
   
@@ -323,6 +356,8 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
   }
   
   findAgents(agentDir, 0)
+  log(`Found ${agents.length} agent(s): ${agents.map(a => a.name).join(", ") || "none"}`, "DISCOVER")
+  logEndWithTime("Agent discovery completed", startTime, "DISCOVER")
   return agents
 }
 
@@ -331,8 +366,8 @@ export async function discoverAgents(repoPath: string): Promise<AgentInfo[]> {
  * Follows OpenCode's naming convention for nested agents.
  */
 function parseAgentMarkdown(
-  filePath: string, 
-  content: string, 
+  filePath: string,
+  content: string,
   agentDir: string
 ): AgentInfo | null {
   let md: matter.GrayMatterFile<string>
@@ -414,6 +449,9 @@ function parseAgentMarkdown(
  * - Max 10 levels of directory nesting
  */
 export async function discoverCommands(repoPath: string): Promise<CommandInfo[]> {
+  const startTime = Date.now()
+  logDebug(`Discovering commands in ${repoPath}`, "DISCOVER")
+  
   const commands: CommandInfo[] = []
   let filesProcessed = 0
   let limitsWarned = false
@@ -425,6 +463,7 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
   }
   
   if (!fs.existsSync(commandDir)) {
+    logDebug(`No commands directory found in ${repoPath}`, "DISCOVER")
     return commands
   }
   
@@ -481,6 +520,8 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
   }
   
   findCommands(commandDir, 0)
+  log(`Found ${commands.length} command(s): ${commands.map(c => c.name).join(", ") || "none"}`, "DISCOVER")
+  logEndWithTime("Command discovery completed", startTime, "DISCOVER")
   return commands
 }
 
@@ -489,7 +530,7 @@ export async function discoverCommands(repoPath: string): Promise<CommandInfo[]>
  * Follows OpenCode's naming convention for nested commands.
  */
 function parseCommandMarkdown(
-  filePath: string, 
+  filePath: string,
   content: string, 
   commandDir: string
 ): CommandInfo | null {
@@ -572,6 +613,9 @@ function parseCommandMarkdown(
  * - Max 10 levels of directory nesting
  */
 export async function discoverPlugins(repoPath: string, repoShortName: string): Promise<PluginInfo[]> {
+  const startTime = Date.now()
+  logDebug(`Discovering plugins in ${repoPath}`, "DISCOVER")
+  
   const plugins: PluginInfo[] = []
   let filesProcessed = 0
   let limitsWarned = false
@@ -583,6 +627,7 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
   }
   
   if (!fs.existsSync(pluginDir)) {
+    logDebug(`No plugins directory found in ${repoPath}`, "DISCOVER")
     return plugins
   }
   
@@ -657,6 +702,8 @@ export async function discoverPlugins(repoPath: string, repoShortName: string): 
   }
   
   findPlugins(pluginDir, 0)
+  log(`Found ${plugins.length} plugin(s): ${plugins.map(p => p.name).join(", ") || "none"}`, "DISCOVER")
+  logEndWithTime("Plugin discovery completed", startTime, "DISCOVER")
   return plugins
 }
 
@@ -681,9 +728,13 @@ export async function syncRepository(config: RepositoryConfig): Promise<SyncResu
  * No cloning needed - directly use the local path
  */
 async function syncLocalDirectory(config: RepositoryConfig): Promise<SyncResult> {
+  const startTime = Date.now()
   const localPath = fileUrlToPath(config.url)
   const repoId = getRepoId(config.url)
   const shortName = path.basename(localPath)
+  
+  logStart(`Syncing local directory: ${shortName}`, "SYNC")
+  log(`Using local directory: ${localPath}`, "SYNC")
   
   let error: string | undefined
   let skills: SkillInfo[] = []
@@ -695,39 +746,53 @@ async function syncLocalDirectory(config: RepositoryConfig): Promise<SyncResult>
   // Check if the directory exists
   if (!fs.existsSync(localPath)) {
     error = `Local directory not found: ${localPath}`
+    logError(error, "SYNC")
   } else if (!fs.statSync(localPath).isDirectory()) {
     error = `Not a directory: ${localPath}`
+    logError(error, "SYNC")
   } else {
     // Discover skills directly from the local directory
     skills = await discoverSkills(localPath)
     
     // Filter skills based on config
+    const originalSkillCount = skills.length
     skills = skills.filter(s => shouldImport(s.name, config.skills))
+    logDebug(`Filtered skills: ${originalSkillCount} -> ${skills.length}`, "SYNC")
     
     // Discover agents directly from the local directory
     agents = await discoverAgents(localPath)
     
     // Filter agents based on config
+    const originalAgentCount = agents.length
     agents = agents.filter(a => shouldImport(a.name, config.agents))
+    logDebug(`Filtered agents: ${originalAgentCount} -> ${agents.length}`, "SYNC")
     
     // Discover commands directly from the local directory
     commands = await discoverCommands(localPath)
     
     // Filter commands based on config
+    const originalCommandCount = commands.length
     commands = commands.filter(c => shouldImport(c.name, config.commands))
+    logDebug(`Filtered commands: ${originalCommandCount} -> ${commands.length}`, "SYNC")
     
     // Discover plugins directly from the local directory
     plugins = await discoverPlugins(localPath, shortName)
     
     // Filter plugins based on config
+    const originalPluginCount = plugins.length
     plugins = plugins.filter(p => shouldImport(p.name, config.plugins))
+    logDebug(`Filtered plugins: ${originalPluginCount} -> ${plugins.length}`, "SYNC")
     
     // Discover instructions from the local directory
     instructions = discoverInstructions(localPath)
     
     // Filter instructions based on config
+    const originalInstructionCount = instructions.length
     instructions = instructions.filter(i => shouldImport(i.name, config.instructions))
+    logDebug(`Filtered instructions: ${originalInstructionCount} -> ${instructions.length}`, "SYNC")
   }
+  
+  logEndWithTime(`Sync completed for ${shortName} (${skills.length} skills, ${agents.length} agents, ${commands.length} commands)`, startTime, "SYNC")
   
   return {
     repoId,
@@ -748,29 +813,43 @@ async function syncLocalDirectory(config: RepositoryConfig): Promise<SyncResult>
  * Sync a git repository
  */
 async function syncGitRepository(config: RepositoryConfig): Promise<SyncResult> {
+  const startTime = Date.now()
   const repoId = getRepoId(config.url)
   const repoPath = getRepoPath(config.url)
   const shortName = config.url.match(/\/([^/]+?)(\.git)?$/)?.[1] || repoId
+  
+  logStart(`Syncing repository: ${shortName}`, "SYNC")
+  log(`Repository: ${config.url}`, "SYNC")
+  log(`Target: ${repoPath}`, "SYNC")
   
   let updated = false
   let error: string | undefined
   
   try {
     if (!isCloned(repoPath)) {
+      log("Repository not cloned yet, cloning...", "SYNC")
       // Clone the repository
       await cloneRepo(config.url, repoPath)
       updated = true
       
       // Checkout specific ref if provided
       if (config.ref) {
+        log(`Checking out ref: ${config.ref}`, "SYNC")
         await fetchAndCheckout(repoPath, config.ref)
       }
     } else {
+      log("Repository already cloned, fetching updates...", "SYNC")
       // Fetch and checkout
       updated = await fetchAndCheckout(repoPath, config.ref)
+      if (updated) {
+        log("Updates found and applied", "SYNC")
+      } else {
+        log("No updates available", "SYNC")
+      }
     }
   } catch (err) {
     error = err instanceof Error ? err.message : String(err)
+    logError(`Sync failed: ${error}`, "SYNC")
   }
   
   // Discover skills, agents, commands, plugins, and instructions even if there was an update error
@@ -786,32 +865,46 @@ async function syncGitRepository(config: RepositoryConfig): Promise<SyncResult> 
     currentRef = await getCurrentRef(repoPath)
     
     // Filter skills based on config
+    const originalSkillCount = skills.length
     skills = skills.filter(s => shouldImport(s.name, config.skills))
+    logDebug(`Filtered skills: ${originalSkillCount} -> ${skills.length}`, "SYNC")
     
     // Discover agents
     agents = await discoverAgents(repoPath)
     
     // Filter agents based on config
+    const originalAgentCount = agents.length
     agents = agents.filter(a => shouldImport(a.name, config.agents))
+    logDebug(`Filtered agents: ${originalAgentCount} -> ${agents.length}`, "SYNC")
     
     // Discover commands
     commands = await discoverCommands(repoPath)
     
     // Filter commands based on config
+    const originalCommandCount = commands.length
     commands = commands.filter(c => shouldImport(c.name, config.commands))
+    logDebug(`Filtered commands: ${originalCommandCount} -> ${commands.length}`, "SYNC")
     
     // Discover plugins
     plugins = await discoverPlugins(repoPath, shortName)
     
     // Filter plugins based on config
+    const originalPluginCount = plugins.length
     plugins = plugins.filter(p => shouldImport(p.name, config.plugins))
+    logDebug(`Filtered plugins: ${originalPluginCount} -> ${plugins.length}`, "SYNC")
     
     // Discover instructions
     instructions = discoverInstructions(repoPath)
     
     // Filter instructions based on config
+    const originalInstructionCount = instructions.length
     instructions = instructions.filter(i => shouldImport(i.name, config.instructions))
+    logDebug(`Filtered instructions: ${originalInstructionCount} -> ${instructions.length}`, "SYNC")
+  } else {
+    logError("Repository not available after sync attempt", "SYNC")
   }
+  
+  logEndWithTime(`Sync completed for ${shortName} (${skills.length} skills, ${agents.length} agents, ${commands.length} commands, ${plugins.length} plugins)`, startTime, "SYNC")
   
   return {
     repoId,

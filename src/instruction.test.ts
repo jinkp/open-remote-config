@@ -1,22 +1,42 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from "fs"
+import { mkdirSync, writeFileSync, rmSync, mkdtempSync, existsSync, readFileSync } from "fs"
 import { join, isAbsolute } from "path"
 import { tmpdir } from "os"
 import { discoverInstructions, InstructionInfo } from "./instruction"
+import { setLogDir, resetLogDir, setLogLevel, resetLogLevel } from "./logging"
 
 describe("instruction", () => {
   describe("discoverInstructions", () => {
     let testDir: string
+    let logDir: string
 
     beforeEach(() => {
       // Create unique temp directory for test isolation
       testDir = mkdtempSync(join(tmpdir(), "instruction-test-"))
+      // Create separate log directory for capturing logs
+      logDir = mkdtempSync(join(tmpdir(), "instruction-log-"))
+      setLogDir(logDir)
+      setLogLevel("warn") // Ensure warnings are logged
     })
 
     afterEach(() => {
       // Clean up after each test
       rmSync(testDir, { recursive: true, force: true })
+      resetLogDir()
+      resetLogLevel()
+      if (existsSync(logDir)) {
+        rmSync(logDir, { recursive: true, force: true })
+      }
     })
+    
+    /** Helper to read log file contents */
+    function getLogContents(): string {
+      const logFile = join(logDir, "plugin.log")
+      if (existsSync(logFile)) {
+        return readFileSync(logFile, "utf-8")
+      }
+      return ""
+    }
 
     test("returns empty array when manifest.json does not exist", () => {
       const result = discoverInstructions(testDir)
@@ -139,19 +159,13 @@ describe("instruction", () => {
       const manifestPath = join(testDir, "manifest.json")
       writeFileSync(manifestPath, "{ invalid json }")
 
-      // Capture console.warn to verify warning is logged
-      const warnings: unknown[][] = []
-      const originalWarn = console.warn
-      console.warn = (...args: unknown[]) => warnings.push(args)
-
-      try {
-        const result = discoverInstructions(testDir)
-        expect(result).toEqual([])
-        expect(warnings.length).toBeGreaterThan(0)
-        expect(warnings.some(w => String(w[0]).includes("[remote-config]"))).toBe(true)
-      } finally {
-        console.warn = originalWarn
-      }
+      const result = discoverInstructions(testDir)
+      expect(result).toEqual([])
+      
+      // Check log file for warning
+      const logContents = getLogContents()
+      expect(logContents).toContain("[WARN]")
+      expect(logContents).toContain("[remote-config]")
     })
 
     test("handles multiple existing instruction files", () => {
@@ -240,20 +254,13 @@ describe("instruction", () => {
         writeFileSync(join(testDir, `file${i}.md`), `# File ${i}`)
       }
 
-      // Capture console.warn to verify warning is logged
-      const warnings: unknown[][] = []
-      const originalWarn = console.warn
-      console.warn = (...args: unknown[]) => warnings.push(args)
-
-      try {
-        const result = discoverInstructions(testDir)
-        // Should be limited to 100
-        expect(result).toHaveLength(100)
-        // Should warn about the limit
-        expect(warnings.some(w => String(w[0]).includes("Limiting instructions to 100"))).toBe(true)
-      } finally {
-        console.warn = originalWarn
-      }
+      const result = discoverInstructions(testDir)
+      // Should be limited to 100
+      expect(result).toHaveLength(100)
+      
+      // Check log file for warning about the limit
+      const logContents = getLogContents()
+      expect(logContents).toContain("Limiting instructions to 100")
     })
 
     test("DoS protection: skips paths exceeding max length", () => {
@@ -263,21 +270,14 @@ describe("instruction", () => {
       writeFileSync(manifestPath, JSON.stringify({ instructions: [longPath, "valid.md"] }))
       writeFileSync(join(testDir, "valid.md"), "# Valid")
 
-      // Capture console.warn to verify warning is logged
-      const warnings: unknown[][] = []
-      const originalWarn = console.warn
-      console.warn = (...args: unknown[]) => warnings.push(args)
-
-      try {
-        const result = discoverInstructions(testDir)
-        // Should only include valid.md
-        expect(result).toHaveLength(1)
-        expect(result[0].name).toBe("valid.md")
-        // Should warn about the long path
-        expect(warnings.some(w => String(w[0]).includes("path exceeding"))).toBe(true)
-      } finally {
-        console.warn = originalWarn
-      }
+      const result = discoverInstructions(testDir)
+      // Should only include valid.md
+      expect(result).toHaveLength(1)
+      expect(result[0].name).toBe("valid.md")
+      
+      // Check log file for warning about long path
+      const logContents = getLogContents()
+      expect(logContents).toContain("path exceeding")
     })
   })
 })

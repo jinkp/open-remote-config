@@ -1,6 +1,7 @@
 import { existsSync } from "fs"
 import { join, normalize, resolve, sep } from "path"
 import { loadManifest, containsPathTraversal } from "./manifest"
+import { logWarn } from "./logging"
 
 /** Discovery limits to prevent DoS from malicious manifests */
 const INSTRUCTION_LIMITS = {
@@ -38,9 +39,7 @@ export function discoverInstructions(repoPath: string): InstructionInfo[] {
   }
 
   if (result.status === "invalid") {
-    console.warn(
-      `[remote-config] Skipping instructions for ${repoPath}: invalid manifest.json`
-    )
+    logWarn(`Skipping instructions for ${repoPath}: invalid manifest.json`)
     return []
   }
 
@@ -49,26 +48,20 @@ export function discoverInstructions(repoPath: string): InstructionInfo[] {
 
   // DoS protection: limit number of instructions to process
   const instructionsToProcess = manifest.instructions.slice(0, INSTRUCTION_LIMITS.maxInstructions)
-  if (manifest.instructions.length > INSTRUCTION_LIMITS.maxInstructions) {
-    console.warn(
-      `[remote-config] Limiting instructions to ${INSTRUCTION_LIMITS.maxInstructions} (manifest has ${manifest.instructions.length})`
-    )
-  }
+    if (manifest.instructions.length > INSTRUCTION_LIMITS.maxInstructions) {
+      logWarn(`Limiting instructions to ${INSTRUCTION_LIMITS.maxInstructions} (manifest has ${manifest.instructions.length})`)
+    }
 
   for (const instructionName of instructionsToProcess) {
     // DoS protection: skip excessively long paths
     if (instructionName.length > INSTRUCTION_LIMITS.maxPathLength) {
-      console.warn(
-        `[remote-config] Skipping instruction with path exceeding ${INSTRUCTION_LIMITS.maxPathLength} chars`
-      )
+      logWarn(`Skipping instruction with path exceeding ${INSTRUCTION_LIMITS.maxPathLength} chars`)
       continue
     }
     // Defense-in-depth: reject paths with traversal segments
     // (manifest validation should have caught this, but verify here too)
     if (containsPathTraversal(instructionName)) {
-      console.warn(
-        `[remote-config] Skipping instruction with path traversal: ${instructionName}`
-      )
+      logWarn(`Skipping instruction with path traversal: ${instructionName}`)
       continue
     }
 
@@ -80,9 +73,7 @@ export function discoverInstructions(repoPath: string): InstructionInfo[] {
     const resolvedPath = normalize(resolve(absolutePath))
     const resolvedRepoPath = normalize(resolve(repoPath))
     if (!resolvedPath.startsWith(resolvedRepoPath + sep)) {
-      console.warn(
-        `[remote-config] Skipping instruction outside repository: ${instructionName}`
-      )
+      logWarn(`Skipping instruction outside repository: ${instructionName}`)
       continue
     }
 

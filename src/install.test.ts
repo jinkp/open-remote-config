@@ -2,6 +2,25 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import * as fs from "fs"
 import * as path from "path"
 import * as os from "os"
+
+/** Check if we can create symlinks (Windows without admin rights cannot) */
+const canCreateSymlinks = (() => {
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "symlink-test-"))
+    const testFile = path.join(tmpDir, "test.txt")
+    const testLink = path.join(tmpDir, "test-link.txt")
+    fs.writeFileSync(testFile, "test")
+    fs.symlinkSync(testFile, testLink)
+    fs.rmSync(tmpDir, { recursive: true })
+    return true
+  } catch {
+    return false
+  }
+})()
+
+/** Skip test if symlinks are not available */
+const testWithSymlinks = canCreateSymlinks ? test : test.skip
+
 import {
   getInstallPath,
   getSymlinkPath,
@@ -81,7 +100,7 @@ describe("install", () => {
   })
 
   describe("createSkillInstall - link mode", () => {
-    test("creates symlink successfully", async () => {
+    testWithSymlinks("creates symlink successfully", async () => {
       const skillDir = createTestSkillDir("test-skill")
       const skill = makeSkillInfo("test-skill", skillDir)
       const targetPath = path.join(testPluginsDir, "test-repo", "test-skill")
@@ -102,7 +121,7 @@ describe("install", () => {
       expect(fs.lstatSync(result.targetPath).isSymbolicLink()).toBe(true)
     })
 
-    test("skips creation if symlink already points to same location", async () => {
+    testWithSymlinks("skips creation if symlink already points to same location", async () => {
       const skillDir = createTestSkillDir("existing-skill")
       const skill = makeSkillInfo("existing-skill", skillDir)
       const targetPath = path.join(testPluginsDir, "test-repo", "existing-skill")
@@ -117,7 +136,7 @@ describe("install", () => {
       expect(result.error).toBeUndefined()
     })
 
-    test("replaces symlink if pointing to different location", async () => {
+    testWithSymlinks("replaces symlink if pointing to different location", async () => {
       const skillDir1 = createTestSkillDir("skill-v1")
       const skillDir2 = createTestSkillDir("skill-v2")
       const targetPath = path.join(testPluginsDir, "test-repo", "changing-skill")
@@ -200,7 +219,7 @@ describe("install", () => {
   })
 
   describe("createInstallsForRepo", () => {
-    test("installs multiple skills", async () => {
+    testWithSymlinks("installs multiple skills", async () => {
       const skill1Dir = createTestSkillDir("skill1")
       const skill2Dir = createTestSkillDir("skill2")
 
@@ -251,7 +270,7 @@ describe("install", () => {
       expect(result.size).toBe(0)
     })
 
-    test("finds symlinked skills", () => {
+    testWithSymlinks("finds symlinked skills", () => {
       const skillDir = createTestSkillDir("linked-skill")
       const repoDir = path.join(testPluginsDir, "repo1")
       const targetPath = path.join(repoDir, "linked-skill")
@@ -290,7 +309,7 @@ describe("install", () => {
       expect(result.get("repo3/random-dir")).toBe(targetPath)
     })
 
-    test("finds both symlinks and copied skills", () => {
+    testWithSymlinks("finds both symlinks and copied skills", () => {
       const skillDir = createTestSkillDir("linked")
       
       // Create symlinked skill
@@ -312,7 +331,7 @@ describe("install", () => {
   })
 
   describe("cleanupStaleInstalls", () => {
-    test("removes symlinks not in current set", () => {
+    testWithSymlinks("removes symlinks not in current set", () => {
       const skillDir = createTestSkillDir("stale-skill")
       const repoDir = path.join(testPluginsDir, "repo1")
       const stalePath = path.join(repoDir, "stale-skill")
@@ -341,7 +360,7 @@ describe("install", () => {
       expect(fs.existsSync(copiedPath)).toBe(false)
     })
 
-    test("keeps skills in current set", () => {
+    testWithSymlinks("keeps skills in current set", () => {
       const skillDir = createTestSkillDir("keep-skill")
       const repoDir = path.join(testPluginsDir, "repo1")
       const keepPath = path.join(repoDir, "keep-skill")
@@ -356,7 +375,7 @@ describe("install", () => {
       expect(fs.existsSync(keepPath)).toBe(true)
     })
 
-    test("removes empty parent directories after cleanup", () => {
+    testWithSymlinks("removes empty parent directories after cleanup", () => {
       const skillDir = createTestSkillDir("cleanup-skill")
       const repoDir = path.join(testPluginsDir, "empty-repo")
       const stalePath = path.join(repoDir, "cleanup-skill")
@@ -377,7 +396,7 @@ describe("install", () => {
   })
 
   describe("deprecated functions", () => {
-    test("createSkillSymlink creates symlink and returns same structure as createSkillInstall with link mode", async () => {
+    testWithSymlinks("createSkillSymlink creates symlink and returns same structure as createSkillInstall with link mode", async () => {
       const skillDir = createTestSkillDir("sync-skill")
       const skill = makeSkillInfo("sync-skill", skillDir)
 
@@ -406,7 +425,7 @@ describe("install", () => {
       expect(syncResult.error).toBe(asyncResult.error)
     })
 
-    test("createSkillSymlink skips creation if symlink already points to same location", () => {
+    testWithSymlinks("createSkillSymlink skips creation if symlink already points to same location", () => {
       const skillDir = createTestSkillDir("existing-sync-skill")
       const skill = makeSkillInfo("existing-sync-skill", skillDir)
       const targetPath = path.join(testPluginsDir, "test-repo", "existing-sync-skill")
@@ -421,7 +440,7 @@ describe("install", () => {
       expect(result.error).toBeUndefined()
     })
 
-    test("createSkillSymlink replaces symlink if pointing to different location", () => {
+    testWithSymlinks("createSkillSymlink replaces symlink if pointing to different location", () => {
       const skillDir1 = createTestSkillDir("sync-skill-v1")
       const skillDir2 = createTestSkillDir("sync-skill-v2")
       const targetPath = path.join(testPluginsDir, "test-repo", "changing-sync-skill")
@@ -454,7 +473,7 @@ describe("install", () => {
       expect(result.error).toContain("is not a symlink")
     })
 
-    test("createSymlinksForRepo processes SyncResult and returns results matching createInstallsForRepo", () => {
+    testWithSymlinks("createSymlinksForRepo processes SyncResult and returns results matching createInstallsForRepo", () => {
       const skill1Dir = createTestSkillDir("repo-skill1")
       const skill2Dir = createTestSkillDir("repo-skill2")
 
@@ -485,7 +504,7 @@ describe("install", () => {
       expect(results).toHaveLength(0)
     })
 
-    test("getExistingSymlinks finds symlinks using recursive scan", () => {
+    testWithSymlinks("getExistingSymlinks finds symlinks using recursive scan", () => {
       const skillDir = createTestSkillDir("find-symlink")
       const repoDir = path.join(testPluginsDir, "repo1")
       const targetPath = path.join(repoDir, "find-symlink")
@@ -499,7 +518,7 @@ describe("install", () => {
       expect(result.get("repo1/find-symlink")).toBe(skillDir)
     })
 
-    test("getExistingSymlinks finds nested symlinks (unlike getExistingInstalls)", () => {
+    testWithSymlinks("getExistingSymlinks finds nested symlinks (unlike getExistingInstalls)", () => {
       // getExistingSymlinks uses recursive scanDir, so it can find deeply nested symlinks
       const skillDir = createTestSkillDir("nested-symlink")
       const nestedDir = path.join(testPluginsDir, "level1", "level2")
@@ -536,7 +555,7 @@ describe("install", () => {
   })
 
   describe("InstallMethod type", () => {
-    test("accepts 'link' and 'copy' values", async () => {
+    testWithSymlinks("accepts 'link' and 'copy' values", async () => {
       const skillDir = createTestSkillDir("type-test")
       const skill = makeSkillInfo("type-test", skillDir)
 

@@ -4,6 +4,10 @@ import * as path from "path"
 import * as fs from "fs"
 import * as os from "os"
 
+const isWindows = os.platform() === "win32"
+/** Skip test on Windows where paths differ */
+const testUnixOnly = isWindows ? test.skip : test
+
 describe("git", () => {
   describe("isFileUrl", () => {
     test("returns true for file:// URLs", () => {
@@ -18,11 +22,11 @@ describe("git", () => {
   })
 
   describe("fileUrlToPath", () => {
-    test("converts file:/// URL to absolute path", () => {
+    testUnixOnly("converts file:/// URL to absolute path", () => {
       expect(fileUrlToPath("file:///path/to/repo")).toBe("/path/to/repo")
     })
 
-    test("converts file:// URL to absolute path", () => {
+    testUnixOnly("converts file:// URL to absolute path", () => {
       // file://path becomes /path after removing file://
       const result = fileUrlToPath("file://path/to/repo")
       expect(result).toContain("path/to/repo")
@@ -37,7 +41,8 @@ describe("git", () => {
   describe("getRepoPath", () => {
     test("generates path in cache directory", () => {
       const repoPath = getRepoPath("git@github.com:org/repo.git")
-      expect(repoPath).toContain(".cache/opencode/remote-config/repos/")
+      // Path separator differs on Windows vs Unix
+      expect(repoPath).toContain(path.join(".cache", "opencode", "remote-config", "repos"))
       expect(repoPath).toContain("github.com-org-repo")
     })
 

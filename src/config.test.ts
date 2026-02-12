@@ -8,6 +8,7 @@ import {
   RepositoryConfigSchema,
   FilterConfigSchema,
   shouldImport,
+  DEFAULT_INSTALL_METHOD,
 } from "./config"
 import { join } from "path"
 import { homedir } from "os"
@@ -158,7 +159,8 @@ describe("config", () => {
       if (result.success) {
         expect(result.data.repositories).toEqual([])
         expect(result.data.sync).toBe("blocking")
-        expect(result.data.installMethod).toBe("link")
+        expect(result.data.installMethod).toBe(DEFAULT_INSTALL_METHOD)
+        expect(result.data.logLevel).toBe("info")
       }
     })
 
@@ -172,6 +174,14 @@ describe("config", () => {
       expect(RemoteSkillsConfigSchema.safeParse({ installMethod: "link" }).success).toBe(true)
       expect(RemoteSkillsConfigSchema.safeParse({ installMethod: "copy" }).success).toBe(true)
       expect(RemoteSkillsConfigSchema.safeParse({ installMethod: "invalid" }).success).toBe(false)
+    })
+
+    test("validates logLevel values", () => {
+      expect(RemoteSkillsConfigSchema.safeParse({ logLevel: "error" }).success).toBe(true)
+      expect(RemoteSkillsConfigSchema.safeParse({ logLevel: "warn" }).success).toBe(true)
+      expect(RemoteSkillsConfigSchema.safeParse({ logLevel: "info" }).success).toBe(true)
+      expect(RemoteSkillsConfigSchema.safeParse({ logLevel: "debug" }).success).toBe(true)
+      expect(RemoteSkillsConfigSchema.safeParse({ logLevel: "invalid" }).success).toBe(false)
     })
 
     test("accepts $schema key for editor support", () => {
@@ -202,20 +212,21 @@ describe("config", () => {
 
   describe("parseConfig", () => {
     test("returns defaults for null/undefined", () => {
-      expect(parseConfig(null)).toEqual({ repositories: [], sync: "blocking", installMethod: "link" })
-      expect(parseConfig(undefined)).toEqual({ repositories: [], sync: "blocking", installMethod: "link" })
+      expect(parseConfig(null)).toEqual({ repositories: [], sync: "blocking", installMethod: DEFAULT_INSTALL_METHOD, logLevel: "info" })
+      expect(parseConfig(undefined)).toEqual({ repositories: [], sync: "blocking", installMethod: DEFAULT_INSTALL_METHOD, logLevel: "info" })
     })
 
     test("returns defaults for non-object", () => {
-      expect(parseConfig("string")).toEqual({ repositories: [], sync: "blocking", installMethod: "link" })
-      expect(parseConfig(123)).toEqual({ repositories: [], sync: "blocking", installMethod: "link" })
+      expect(parseConfig("string")).toEqual({ repositories: [], sync: "blocking", installMethod: DEFAULT_INSTALL_METHOD, logLevel: "info" })
+      expect(parseConfig(123)).toEqual({ repositories: [], sync: "blocking", installMethod: DEFAULT_INSTALL_METHOD, logLevel: "info" })
     })
 
     test("returns defaults for empty object", () => {
       const result = parseConfig({})
       expect(result.repositories).toEqual([])
       expect(result.sync).toBe("blocking")
-      expect(result.installMethod).toBe("link")
+      expect(result.installMethod).toBe(DEFAULT_INSTALL_METHOD)
+      expect(result.logLevel).toBe("info")
     })
 
     test("parses valid config directly (no wrapper key)", () => {
@@ -229,11 +240,11 @@ describe("config", () => {
     })
 
     describe("installMethod", () => {
-      test("defaults to 'link' when not specified", () => {
+      test("defaults to DEFAULT_INSTALL_METHOD when not specified", () => {
         const config = parseConfig({
           repositories: [],
         })
-        expect(config.installMethod).toBe("link")
+        expect(config.installMethod).toBe(DEFAULT_INSTALL_METHOD)
       })
 
       test("accepts 'link' value", () => {
@@ -259,7 +270,7 @@ describe("config", () => {
           repositories: [],
         })
         // parseConfig returns DEFAULT_CONFIG on validation failure
-        expect(config.installMethod).toBe("link")
+        expect(config.installMethod).toBe(DEFAULT_INSTALL_METHOD)
       })
     })
   })

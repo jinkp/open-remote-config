@@ -1,15 +1,18 @@
 import * as path from "path"
 import * as fs from "fs"
+import { homedir } from "os"
 import { $ } from "bun"
 import type { SkillInfo, SyncResult } from "./git"
 import { syncDirectory } from "./copy"
+import { IS_WINDOWS, DEFAULT_INSTALL_METHOD } from "./config"
+import { log, logDebug, logError, logWarn, logEndWithTime } from "./logging"
 
 /** How to install skills: symlink or copy */
 export type InstallMethod = "link" | "copy"
 
 /** Base directory for OpenCode skills */
 const SKILL_BASE = path.join(
-  process.env.HOME || "~",
+  homedir(),
   ".config",
   "opencode",
   "skill"
@@ -64,11 +67,15 @@ export function ensurePluginsDir(): void {
 /**
  * Internal helper: create a symlink for a skill (sync).
  * Used by both createSkillInstall (for link mode) and deprecated createSkillSymlink.
+ * On Windows, symlinks require admin privileges or developer mode - this is handled
+ * by the caller which should fall back to copy mode if symlink creation fails.
  */
 function createSymlinkSync(
   sourcePath: string,
   targetPath: string
-): { created: boolean; error?: string } {
+): { created: boolean; error?: string; requiresFallback?: boolean } {
+  logDebug(`Creating symlink: ${sourcePath} -> ${targetPath}`, "INSTALL")
+  
   // Check if symlink already exists
   if (fs.existsSync(targetPath)) {
     const stats = fs.lstatSync(targetPath)
@@ -78,13 +85,16 @@ function createSymlinkSync(
       
       // If pointing to same location, nothing to do
       if (existingTarget === sourcePath) {
+        logDebug(`Symlink already exists and points to same location, skipping`, "INSTALL")
         return { created: false }
       }
       
       // Remove old symlink pointing to different location
+      logDebug(`Removing old symlink pointing to different location`, "INSTALL")
       fs.unlinkSync(targetPath)
     } else {
       // Existing directory or file (from copy mode) - remove it to make way for symlink
+      logDebug(`Removing existing ${stats.isFile() ? "file" : "directory"} to create symlink`, "INSTALL")
       if (stats.isFile()) {
         fs.unlinkSync(targetPath)
       } else if (stats.isDirectory()) {
@@ -94,8 +104,25 @@ function createSymlinkSync(
   }
   
   // Create the symlink
-  fs.symlinkSync(sourcePath, targetPath, "dir")
-  return { created: true }
+  try {
+    // Use 'junction' type on Windows for directories (doesn't require admin)
+    // 'dir' type requires admin privileges or developer mode on Windows
+    const type = process.platform === "win32" ? "junction" : "dir"
+    fs.symlinkSync(sourcePath, targetPath, type)
+    logDebug(`Symlink created successfully`, "INSTALL")
+    return { created: true }
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    // On Windows, EPERM indicates missing privileges for symlinks
+    const requiresFallback = IS_WINDOWS && 
+      (errorMessage.includes("EPERM") || errorMessage.includes("operation not permitted"))
+    if (requiresFallback) {
+      logWarn(`Symlink creation failed (EPERM), will attempt fallback to copy`, "INSTALL")
+    } else {
+      logError(`Symlink creation failed: ${errorMessage}`, "INSTALL")
+    }
+    return { created: false, error: errorMessage, requiresFallback }
+  }
 }
 
 /**
@@ -111,7 +138,13 @@ export async function createSkillInstall(
   repoShortName: string,
   installMethod: InstallMethod = "link"
 ): Promise<InstallResult> {
+  const startTime = Date.now()
   const targetPath = getInstallPath(repoShortName, skill.name)
+  
+  log(`Installing skill: ${skill.name} (method: ${installMethod})`, "INSTALL")
+  logDebug(`Source: ${skill.path}`, "INSTALL")
+  logDebug(`Target: ${targetPath}`, "INSTALL")
+  
   const result: InstallResult = {
     skillName: skill.name,
     sourcePath: skill.path,
@@ -129,6 +162,7 @@ export async function createSkillInstall(
         const stats = fs.lstatSync(targetPath)
         // If it's already a directory (not a symlink), it's already in copy mode - skip
         if (stats.isDirectory() && !stats.isSymbolicLink()) {
+          logDebug(`Skill already installed (copy mode), skipping: ${skill.name}`, "INSTALL")
           result.created = false
           return result
         }
@@ -138,16 +172,33 @@ export async function createSkillInstall(
       // Copy the directory (will remove existing symlink/file first)
       await syncDirectory(skill.path, targetPath)
       result.created = true
+      logEndWithTime(`Skill installed (copy): ${skill.name}`, startTime, "INSTALL")
     } else {
       // Link mode: delegate to shared helper
       const symlinkResult = createSymlinkSync(skill.path, targetPath)
       result.created = symlinkResult.created
       if (symlinkResult.error) {
         result.error = symlinkResult.error
+        // On Windows, if symlink failed due to permissions, fall back to copy mode
+        if (symlinkResult.requiresFallback) {
+          log(`Falling back to copy mode for: ${skill.name}`, "INSTALL")
+          try {
+            await syncDirectory(skill.path, targetPath)
+            result.created = true
+            result.error = undefined  // Clear error since fallback succeeded
+            logEndWithTime(`Skill installed (copy fallback): ${skill.name}`, startTime, "INSTALL")
+          } catch (copyErr) {
+            result.error = `Symlink failed: ${symlinkResult.error}. Copy fallback also failed: ${copyErr instanceof Error ? copyErr.message : String(copyErr)}`
+            logError(result.error, "INSTALL")
+          }
+        }
+      } else if (result.created) {
+        logEndWithTime(`Skill installed (link): ${skill.name}`, startTime, "INSTALL")
       }
     }
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err)
+    logError(`Failed to install skill ${skill.name}: ${result.error}`, "INSTALL")
   }
   
   return result
@@ -196,6 +247,9 @@ export async function createInstallsForRepo(
   syncResult: SyncResult,
   installMethod: InstallMethod = "link"
 ): Promise<InstallResult[]> {
+  const startTime = Date.now()
+  log(`Installing ${syncResult.skills.length} skill(s) from ${syncResult.shortName}`, "INSTALL")
+  
   ensurePluginsDir()
   
   const results: InstallResult[] = []
@@ -204,6 +258,11 @@ export async function createInstallsForRepo(
     const result = await createSkillInstall(skill, syncResult.shortName, installMethod)
     results.push(result)
   }
+  
+  const successCount = results.filter(r => r.created && !r.error).length
+  const errorCount = results.filter(r => r.error).length
+  
+  logEndWithTime(`Installed ${successCount}/${results.length} skills from ${syncResult.shortName}${errorCount > 0 ? ` (${errorCount} errors)` : ""}`, startTime, "INSTALL")
   
   return results
 }
@@ -304,12 +363,23 @@ export function getExistingSymlinks(): Map<string, string> {
  * @returns Cleanup result
  */
 export function cleanupStaleInstalls(currentSkills: Set<string>): CleanupResult {
+  const startTime = Date.now()
+  logDebug("Checking for stale skill installations...", "CLEANUP")
+  
   const result: CleanupResult = {
     removed: [],
     errors: [],
   }
   
   const existingInstalls = getExistingInstalls()
+  const staleCount = [...existingInstalls.keys()].filter(p => !currentSkills.has(p)).length
+  
+  if (staleCount === 0) {
+    logDebug("No stale installations found", "CLEANUP")
+    return result
+  }
+  
+  log(`Found ${staleCount} stale installation(s) to remove`, "CLEANUP")
   
   for (const [relativePath] of existingInstalls) {
     if (!currentSkills.has(relativePath)) {
@@ -320,9 +390,11 @@ export function cleanupStaleInstalls(currentSkills: Set<string>): CleanupResult 
         
         if (stats.isSymbolicLink()) {
           // Remove symlink
+          log(`Removing stale symlink: ${relativePath}`, "CLEANUP")
           fs.unlinkSync(fullPath)
         } else if (stats.isDirectory()) {
           // Remove copied directory
+          log(`Removing stale directory: ${relativePath}`, "CLEANUP")
           fs.rmSync(fullPath, { recursive: true, force: true })
         }
         
@@ -334,6 +406,7 @@ export function cleanupStaleInstalls(currentSkills: Set<string>): CleanupResult 
           try {
             const entries = fs.readdirSync(parentDir)
             if (entries.length === 0) {
+              logDebug(`Removing empty directory: ${parentDir}`, "CLEANUP")
               fs.rmdirSync(parentDir)
               parentDir = path.dirname(parentDir)
             } else {
@@ -344,12 +417,14 @@ export function cleanupStaleInstalls(currentSkills: Set<string>): CleanupResult 
           }
         }
       } catch (err) {
-        result.errors.push(
-          `Failed to remove ${relativePath}: ${err instanceof Error ? err.message : String(err)}`
-        )
+        const errorMsg = `Failed to remove ${relativePath}: ${err instanceof Error ? err.message : String(err)}`
+        logError(errorMsg, "CLEANUP")
+        result.errors.push(errorMsg)
       }
     }
   }
+  
+  logEndWithTime(`Cleanup completed: ${result.removed.length} removed, ${result.errors.length} errors`, startTime, "CLEANUP")
   
   return result
 }
@@ -370,8 +445,20 @@ export function hasLocalConflict(skillName: string): boolean {
   
   // Check if the path exists and is NOT inside _plugins
   if (fs.existsSync(localSkillPath)) {
-    const realPath = fs.realpathSync(localSkillPath)
-    return !realPath.includes("_plugins")
+    try {
+      const realPath = path.normalize(fs.realpathSync(localSkillPath))
+      const pluginsPath = path.normalize(PLUGINS_DIR)
+      // Check if realPath is within PLUGINS_DIR (handles both / and \ on Windows)
+      const hasConflict = !realPath.startsWith(pluginsPath + path.sep) && realPath !== pluginsPath
+      if (hasConflict) {
+        logWarn(`Local conflict detected for skill: ${skillName}`, "INSTALL")
+      }
+      return hasConflict
+    } catch {
+      // If realpath fails, assume it's a local skill
+      logWarn(`Could not resolve path for skill ${skillName}, assuming local conflict`, "INSTALL")
+      return true
+    }
   }
   
   return false

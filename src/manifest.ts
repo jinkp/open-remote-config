@@ -1,16 +1,18 @@
 import { z } from "zod"
 import { existsSync, readFileSync } from "fs"
 import { join, isAbsolute } from "path"
+import { logWarn } from "./logging"
 
 /** Manifest file name */
 const MANIFEST_FILENAME = "manifest.json"
 
 /**
  * Checks if a path contains traversal or self-reference segments ("." or "..").
- * Splits on "/" and checks for "." or ".." as standalone segments.
+ * Splits on "/" or "\\" and checks for "." or ".." as standalone segments.
  */
-export function containsPathTraversal(path: string): boolean {
-  return path.split("/").some((segment) => segment === ".." || segment === ".")
+export function containsPathTraversal(pathStr: string): boolean {
+  // Split on both / and \ for cross-platform compatibility
+  return pathStr.split(/[\\/]/).some((segment) => segment === ".." || segment === ".")
 }
 
 /**
@@ -111,17 +113,14 @@ export function loadManifest(repoPath: string): ManifestResult {
 
     if (!result.success) {
       const errorMessage = JSON.stringify(result.error.format())
-      console.warn(
-        `[remote-config] Invalid manifest.json in ${repoPath}:`,
-        result.error.format()
-      )
+      logWarn(`Invalid manifest.json in ${repoPath}: ${errorMessage}`)
       return { status: "invalid", error: errorMessage }
     }
 
     return { status: "found", manifest: result.data }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
-    console.warn(`[remote-config] Error reading manifest.json in ${repoPath}:`, error)
+    logWarn(`Error reading manifest.json in ${repoPath}: ${errorMessage}`)
     return { status: "invalid", error: errorMessage }
   }
 }

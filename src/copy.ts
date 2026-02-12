@@ -1,7 +1,8 @@
 import { $ } from "bun"
 import * as fs from "fs"
 import * as path from "path"
-import { logDebug, logError } from "./logging"
+import { IS_WINDOWS } from "./config"
+import { log, logDebug, logError, logEndWithTime } from "./logging"
 
 /** Cached result of rsync availability check */
 let rsyncAvailable: boolean | null = null
@@ -9,19 +10,30 @@ let rsyncAvailable: boolean | null = null
 /**
  * Detect if rsync is available on the system.
  * Result is cached after first call for performance.
+ * On Windows, checks for common rsync installations (Git Bash, WSL, Cygwin).
  */
 export async function detectRsync(): Promise<boolean> {
   if (rsyncAvailable !== null) {
+    logDebug(`rsync availability (cached): ${rsyncAvailable}`, "COPY")
     return rsyncAvailable
   }
 
+  logDebug("Detecting rsync availability...", "COPY")
+  
   try {
-    const result = await $`which rsync`.quiet()
-    rsyncAvailable = result.exitCode === 0
+    if (IS_WINDOWS) {
+      // On Windows, try 'where' command first (cmd) then 'which' (Git Bash)
+      const result = await $`where rsync`.quiet().nothrow()
+      rsyncAvailable = result.exitCode === 0 && result.stdout.toString().trim().length > 0
+    } else {
+      const result = await $`which rsync`.quiet().nothrow()
+      rsyncAvailable = result.exitCode === 0
+    }
   } catch {
     rsyncAvailable = false
   }
 
+  logDebug(`rsync available: ${rsyncAvailable}`, "COPY")
   return rsyncAvailable
 }
 
@@ -101,6 +113,9 @@ export async function syncDirectory(
   source: string,
   target: string
 ): Promise<SyncDirectoryResult> {
+  const startTime = Date.now()
+  logDebug(`Syncing directory: ${source} -> ${target}`, "COPY")
+  
   // Validate source exists and is a directory
   let sourceStat: fs.Stats
   try {
@@ -113,12 +128,17 @@ export async function syncDirectory(
   }
 
   // Check for overlapping paths (would cause infinite recursion or data loss)
-  const resolvedSource = path.resolve(source)
-  const resolvedTarget = path.resolve(target)
-  if (resolvedTarget.startsWith(resolvedSource + path.sep)) {
+  // Use normalize to handle both / and \ separators consistently
+  const resolvedSource = path.normalize(path.resolve(source))
+  const resolvedTarget = path.normalize(path.resolve(target))
+  // Add trailing separator for accurate prefix checking
+  const sourceWithSep = resolvedSource.endsWith(path.sep) ? resolvedSource : resolvedSource + path.sep
+  const targetWithSep = resolvedTarget.endsWith(path.sep) ? resolvedTarget : resolvedTarget + path.sep
+  
+  if (resolvedTarget.startsWith(sourceWithSep) || resolvedTarget === resolvedSource) {
     throw new Error(`Target cannot be inside source: ${target} is inside ${source}`)
   }
-  if (resolvedSource.startsWith(resolvedTarget + path.sep)) {
+  if (resolvedSource.startsWith(targetWithSep) || resolvedSource === resolvedTarget) {
     throw new Error(`Source cannot be inside target: ${source} is inside ${target}`)
   }
 
@@ -126,21 +146,25 @@ export async function syncDirectory(
 
   if (hasRsync) {
     try {
+      logDebug("Using rsync for directory sync", "COPY")
       await copyWithRsync(source, target)
-      logDebug(`Copied ${source} → ${target} using rsync`)
+      logEndWithTime(`Copied using rsync: ${source} -> ${target}`, startTime, "COPY")
       return { method: "rsync" }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err)
-      logError(`rsync failed, falling back to fs: ${errorMessage}`)
+      logError(`rsync failed, falling back to fs: ${errorMessage}`, "COPY")
       // Fall through to fs fallback
     }
   }
 
   try {
+    logDebug("Using fs.cpSync for directory sync", "COPY")
     copyWithNodeFs(source, target)
-    logDebug(`Copied ${source} → ${target} using fs.cpSync`)
+    logEndWithTime(`Copied using fs.cpSync: ${source} -> ${target}`, startTime, "COPY")
     return { method: "fs" }
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err)
+    logError(`Copy failed: ${errorMessage}`, "COPY")
     // Clean up partial target on failure
     try {
       if (fs.existsSync(target)) {
@@ -150,6 +174,7 @@ export async function syncDirectory(
         } else {
           fs.rmSync(target, { recursive: true, force: true })
         }
+        logDebug("Cleaned up partial target after failure", "COPY")
       }
     } catch {
       // Ignore cleanup errors

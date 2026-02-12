@@ -1,8 +1,14 @@
 import { z } from "zod"
 import { existsSync, readFileSync } from "fs"
-import { join } from "path"
-import { homedir } from "os"
-import { logError } from "./logging"
+import { join, basename } from "path"
+import { homedir, platform } from "os"
+import { logError, setLogLevel, log, LogLevel } from "./logging"
+
+/** Check if running on Windows */
+export const IS_WINDOWS = platform() === "win32"
+
+/** Default install method based on platform */
+export const DEFAULT_INSTALL_METHOD = IS_WINDOWS ? "copy" : "link"
 
 /** Configuration file name */
 const CONFIG_FILENAME = "remote-config.json"
@@ -129,10 +135,20 @@ export const RemoteSkillsConfigSchema = z.object({
   
   /**
    * How to install skills and plugins from remote repositories:
-   * - "link": Create symlinks (default, fast, but may not work in containers)
+   * - "link": Create symlinks (fast, but may not work in containers or Windows without admin)
    * - "copy": Copy files (works everywhere, uses rsync if available)
+   * Default is "copy" on Windows, "link" on other platforms
    */
-  installMethod: z.enum(["link", "copy"]).default("link"),
+  installMethod: z.enum(["link", "copy"]).default(DEFAULT_INSTALL_METHOD),
+
+  /**
+   * Log level for debugging purposes:
+   * - "error": Only errors
+   * - "warn": Errors and warnings
+   * - "info": Errors, warnings and info (default)
+   * - "debug": All logs including debug details
+   */
+  logLevel: z.enum(["error", "warn", "info", "debug"]).default("info"),
 }).strict()
 
 export type RemoteSkillsConfig = z.infer<typeof RemoteSkillsConfigSchema>
@@ -143,7 +159,8 @@ export type RemoteSkillsConfig = z.infer<typeof RemoteSkillsConfigSchema>
 export const DEFAULT_CONFIG: RemoteSkillsConfig = {
   repositories: [],
   sync: "blocking",
-  installMethod: "link",
+  installMethod: DEFAULT_INSTALL_METHOD,
+  logLevel: "info",
 }
 
 /**
@@ -199,8 +216,14 @@ export function loadConfigWithLocation(): ConfigLoadResult {
           continue
         }
         
+        // Apply the configured log level
+        setLogLevel(result.data.logLevel as LogLevel)
+        
         // Extract the opencode config directory (parent of the config file)
         const configDir = join(configPath, "..")
+        
+        log(`Config loaded from: ${configPath}`, "CONFIG")
+        log(`Log level set to: ${result.data.logLevel}`, "CONFIG")
         
         return { config: result.data, configDir }
       } catch (error) {
@@ -248,9 +271,10 @@ export function getRepoShortName(url: string): string {
   // Handle file:// URLs - use the directory name
   if (url.startsWith("file://")) {
     const localPath = url.replace(/^file:\/\//, "")
-    const basename = localPath.split("/").filter(Boolean).pop()
-    if (basename) {
-      return basename
+    // Use path.basename for cross-platform compatibility (handles both / and \)
+    const name = basename(localPath)
+    if (name) {
+      return name
     }
   }
   

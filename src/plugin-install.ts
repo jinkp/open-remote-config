@@ -3,6 +3,8 @@ import * as path from "path"
 import { homedir } from "os"
 import type { PluginInfo } from "./plugin-info"
 import type { InstallMethod } from "./install"
+import { IS_WINDOWS } from "./config"
+import { log, logDebug, logError, logWarn, logEndWithTime } from "./logging"
 
 /** Default directory where OpenCode looks for plugins */
 const DEFAULT_PLUGIN_DIR = path.join(homedir(), ".config", "opencode", "plugin")
@@ -93,8 +95,13 @@ export function createPluginInstall(
   pluginDir: string = DEFAULT_PLUGIN_DIR,
   installMethod: InstallMethod = "link"
 ): PluginInstallResult {
+  const startTime = Date.now()
   const symlinkName = getPluginSymlinkName(plugin)
   const symlinkPath = path.join(pluginDir, symlinkName)
+  
+  log(`Installing plugin: ${plugin.name} (method: ${installMethod})`, "INSTALL")
+  logDebug(`Source: ${plugin.path}`, "INSTALL")
+  logDebug(`Target: ${symlinkPath}`, "INSTALL")
   
   const result: PluginInstallResult = {
     pluginName: plugin.name,
@@ -112,12 +119,29 @@ export function createPluginInstall(
     if (installMethod === "copy") {
       // For plugin files, copy the single file (not directory)
       fs.cpSync(plugin.path, symlinkPath)
+      logEndWithTime(`Plugin installed (copy): ${plugin.name}`, startTime, "INSTALL")
     } else {
       // Create symlink
-      fs.symlinkSync(plugin.path, symlinkPath)
+      try {
+        // On Windows, 'file' type is used for files (not 'junction')
+        const type = IS_WINDOWS ? "file" : undefined
+        fs.symlinkSync(plugin.path, symlinkPath, type)
+        logEndWithTime(`Plugin installed (link): ${plugin.name}`, startTime, "INSTALL")
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        // On Windows, if symlink failed due to permissions, fall back to copy
+        if (IS_WINDOWS && (errorMessage.includes("EPERM") || errorMessage.includes("operation not permitted"))) {
+          logWarn(`Symlink failed for plugin ${plugin.name}, falling back to copy`, "INSTALL")
+          fs.cpSync(plugin.path, symlinkPath)
+          logEndWithTime(`Plugin installed (copy fallback): ${plugin.name}`, startTime, "INSTALL")
+        } else {
+          throw err
+        }
+      }
     }
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err)
+    logError(`Failed to install plugin ${plugin.name}: ${result.error}`, "INSTALL")
   }
   
   return result
@@ -166,7 +190,23 @@ export function createPluginInstalls(
   pluginDir: string = DEFAULT_PLUGIN_DIR,
   installMethod: InstallMethod = "link"
 ): PluginInstallResult[] {
-  return plugins.map(plugin => createPluginInstall(plugin, pluginDir, installMethod))
+  const startTime = Date.now()
+  
+  if (plugins.length === 0) {
+    logDebug("No plugins to install", "INSTALL")
+    return []
+  }
+  
+  log(`Installing ${plugins.length} plugin(s)`, "INSTALL")
+  
+  const results = plugins.map(plugin => createPluginInstall(plugin, pluginDir, installMethod))
+  
+  const successCount = results.filter(r => !r.error).length
+  const errorCount = results.filter(r => r.error).length
+  
+  logEndWithTime(`Installed ${successCount}/${results.length} plugins${errorCount > 0 ? ` (${errorCount} errors)` : ""}`, startTime, "INSTALL")
+  
+  return results
 }
 
 /**
@@ -215,24 +255,38 @@ export function cleanupStalePluginInstalls(
   currentInstalls: Set<string>,
   pluginDir: string = DEFAULT_PLUGIN_DIR
 ): PluginCleanupResult {
+  const startTime = Date.now()
+  logDebug("Checking for stale plugin installations...", "CLEANUP")
+  
   const result: PluginCleanupResult = {
     removed: [],
     errors: [],
   }
   
   const existing = getRemotePluginInstalls(pluginDir)
+  const stalePlugins = existing.filter(name => !currentInstalls.has(name))
   
-  for (const name of existing) {
-    if (!currentInstalls.has(name)) {
-      const installPath = path.join(pluginDir, name)
-      try {
-        removePathIfExists(installPath)
-        result.removed.push(name)
-      } catch (err) {
-        result.errors.push(`Failed to remove ${name}: ${err instanceof Error ? err.message : String(err)}`)
-      }
+  if (stalePlugins.length === 0) {
+    logDebug("No stale plugins found", "CLEANUP")
+    return result
+  }
+  
+  log(`Found ${stalePlugins.length} stale plugin(s) to remove`, "CLEANUP")
+  
+  for (const name of stalePlugins) {
+    const installPath = path.join(pluginDir, name)
+    try {
+      log(`Removing stale plugin: ${name}`, "CLEANUP")
+      removePathIfExists(installPath)
+      result.removed.push(name)
+    } catch (err) {
+      const errorMsg = `Failed to remove ${name}: ${err instanceof Error ? err.message : String(err)}`
+      logError(errorMsg, "CLEANUP")
+      result.errors.push(errorMsg)
     }
   }
+  
+  logEndWithTime(`Plugin cleanup completed: ${result.removed.length} removed, ${result.errors.length} errors`, startTime, "CLEANUP")
   
   return result
 }

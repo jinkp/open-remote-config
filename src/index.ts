@@ -18,7 +18,8 @@ import {
   getPluginSymlinkName,
 } from "./plugin-install"
 import type { PluginInfo } from "./plugin-info"
-import { log, logError, logDebug } from "./logging"
+import { log, logError, logDebug, logStart, logEndWithTime } from "./logging"
+import { IS_WINDOWS } from "./config"
 
 /** Guard to prevent duplicate initialization within the same process */
 let initialized = false
@@ -232,20 +233,24 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
   }
   initialized = true
 
+  const pluginStartTime = Date.now()
+  logStart("opencode-remote-config plugin", "PLUGIN")
+  logDebug(`Platform: ${IS_WINDOWS ? "Windows" : "Unix/Linux/macOS"}`, "PLUGIN")
+
   // Load configuration from separate file (not opencode.json)
   const pluginConfig = loadConfig()
+  logDebug(`Install method: ${pluginConfig.installMethod}`, "PLUGIN")
 
   if (pluginConfig.repositories.length === 0) {
     // No repositories configured, nothing to do
+    logDebug("No repositories configured, plugin idle", "PLUGIN")
+    logEndWithTime("opencode-remote-config plugin", pluginStartTime, "PLUGIN")
     return {}
   }
+  
+  logDebug(`Configured repositories: ${pluginConfig.repositories.length}`, "PLUGIN")
 
-  // Log the installation method being used
-  if (pluginConfig.installMethod === "copy") {
-    logDebug("Using copy mode for skill/plugin installation")
-  } else {
-    logDebug("Using symlink mode for skill/plugin installation")
-  }
+
 
   // Ensure the _plugins directory exists
   ensurePluginsDir()
@@ -280,6 +285,19 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
     }
   }
   log(message)
+  
+  // Log summary
+  const summaryParts: string[] = []
+  if (totalSkills > 0) summaryParts.push(`${totalSkills} skills`)
+  if (totalPlugins > 0) summaryParts.push(`${totalPlugins} plugins`)
+  if (remoteAgents.size > 0) summaryParts.push(`${remoteAgents.size} agents`)
+  if (remoteCommands.size > 0) summaryParts.push(`${remoteCommands.size} commands`)
+  if (remoteInstructions.length > 0) summaryParts.push(`${remoteInstructions.length} instructions`)
+  
+  if (summaryParts.length > 0) {
+    logDebug(`Summary: ${summaryParts.join(", ")}`, "PLUGIN")
+  }
+  logEndWithTime("opencode-remote-config plugin", pluginStartTime, "PLUGIN")
 
   return {
     /**

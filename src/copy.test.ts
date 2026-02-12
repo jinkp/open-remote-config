@@ -4,6 +4,10 @@ import * as fs from "fs"
 import * as path from "path"
 import * as os from "os"
 
+const isWindows = os.platform() === "win32"
+/** Skip test on Windows */
+const testUnixOnly = isWindows ? test.skip : test
+
 describe("copy", () => {
   let tmpDir: string
 
@@ -48,6 +52,12 @@ describe("copy", () => {
       setRsyncAvailable(false)
       const result = await detectRsync()
       expect(result).toBe(false)
+    })
+
+    test("returns boolean on all platforms", async () => {
+      // This test verifies detectRsync works regardless of platform
+      const result = await detectRsync()
+      expect(typeof result).toBe("boolean")
     })
   })
 
@@ -130,7 +140,7 @@ describe("copy", () => {
       expect(["rsync", "fs"]).toContain(result.method)
     })
 
-    test("uses rsync method when rsync is available", async () => {
+    testUnixOnly("uses rsync method when rsync is available", async () => {
       setRsyncAvailable(true)
       
       const source = path.join(tmpDir, "source")
@@ -194,7 +204,7 @@ describe("copy", () => {
       await expect(syncDirectory(source, target)).rejects.toThrow("Source cannot be inside target")
     })
 
-    test("cleans up partial target on failure", async () => {
+    testUnixOnly("cleans up partial target on failure", async () => {
       // Force fs method (not rsync) so we hit the cleanup code path
       setRsyncAvailable(false)
       
