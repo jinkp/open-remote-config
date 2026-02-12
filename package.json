@@ -1,14 +1,14 @@
 {
-  "name": "@jgordijn/opencode-remote-config",
-  "version": "0.3.1",
+  "name": "opencode-remote-config",
+  "version": "0.4.0",
   "description": "OpenCode plugin to sync skills, agents and commands from Git repositories",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jgordijn/opencode-remote-config.git"
+    "url": "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
   },
-  "homepage": "https://github.com/jgordijn/opencode-remote-config#readme",
+  "homepage": "https://bitbucket.org/softrestaurant-team/opencode-remote-config#readme",
   "bugs": {
-    "url": "https://github.com/jgordijn/opencode-remote-config/issues"
+    "url": "https://bitbucket.org/softrestaurant-team/opencode-remote-config/issues"
   },
   "type": "module",
   "main": "dist/index.js",
