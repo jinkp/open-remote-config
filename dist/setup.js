@@ -2,16 +2,52 @@
 // @bun
 
 // src/setup.ts
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, statSync } from "fs";
 import { join } from "path";
 var {$ } = globalThis.Bun;
+import { Readable } from "stream";
+import { createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 var PLUGIN_NAME = "opencode-remote-config";
-var PLUGIN_URL = "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git";
-var OPENCODE_PLUGIN = "@opencode-ai/plugin";
-var OPENCODE_PLUGIN_VERSION = "^1.1.0";
+var PLUGIN_ZIP_URL = "https://bitbucket.org/softrestaurant-team/opencode-remote-config/get/main.zip";
+async function downloadFile(url, destPath) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download: ${response.statusText}`);
+  }
+  const fileStream = createWriteStream(destPath);
+  await pipeline(Readable.fromWeb(response.body), fileStream);
+}
+async function extractZip(zipPath, destDir) {
+  const isWindows = process.platform === "win32";
+  if (isWindows) {
+    await $`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`;
+  } else {
+    await $`unzip -o ${zipPath} -d ${destDir}`;
+  }
+}
+function copyDirRecursive(src, dest) {
+  if (!existsSync(dest)) {
+    mkdirSync(dest, { recursive: true });
+  }
+  const entries = readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+    if (entry.name === ".git")
+      continue;
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      copyFileSync(srcPath, destPath);
+    }
+  }
+}
 async function main() {
   const cwd = process.cwd();
   const opencodeDir = join(cwd, ".opencode");
+  const nodeModulesDir = join(opencodeDir, "node_modules");
+  const pluginDir = join(nodeModulesDir, PLUGIN_NAME);
   console.log(`\uD83D\uDD27 OpenCode Remote Config Setup
 `);
   if (!existsSync(opencodeDir)) {
@@ -20,37 +56,49 @@ async function main() {
   } else {
     console.log("\u2713 .opencode directory exists");
   }
-  const packageJsonPath = join(opencodeDir, "package.json");
-  let packageJson = {};
-  if (existsSync(packageJsonPath)) {
+  if (!existsSync(pluginDir)) {
+    console.log("\uD83D\uDCE5 Downloading plugin from Bitbucket...");
+    const tempDir = join(opencodeDir, "_temp");
+    const zipPath = join(opencodeDir, "plugin.zip");
     try {
-      packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-    } catch {
-      console.log("\u26A0 Could not parse existing package.json, creating new one");
+      mkdirSync(tempDir, { recursive: true });
+      mkdirSync(nodeModulesDir, { recursive: true });
+      await downloadFile(PLUGIN_ZIP_URL, zipPath);
+      console.log("\u2713 Downloaded plugin");
+      await extractZip(zipPath, tempDir);
+      console.log("\u2713 Extracted plugin");
+      const extractedFolders = readdirSync(tempDir).filter((f) => statSync(join(tempDir, f)).isDirectory());
+      if (extractedFolders.length === 0) {
+        throw new Error("No folder found in zip");
+      }
+      const extractedFolder = join(tempDir, extractedFolders[0]);
+      copyDirRecursive(extractedFolder, pluginDir);
+      console.log("\u2713 Installed plugin to node_modules");
+      rmSync(tempDir, { recursive: true, force: true });
+      rmSync(zipPath, { force: true });
+    } catch (err) {
+      if (existsSync(tempDir))
+        rmSync(tempDir, { recursive: true, force: true });
+      if (existsSync(zipPath))
+        rmSync(zipPath, { force: true });
+      throw err;
     }
-  }
-  if (!packageJson.dependencies || typeof packageJson.dependencies !== "object") {
-    packageJson.dependencies = {};
-  }
-  const deps = packageJson.dependencies;
-  let updated = false;
-  if (!deps[OPENCODE_PLUGIN]) {
-    deps[OPENCODE_PLUGIN] = OPENCODE_PLUGIN_VERSION;
-    updated = true;
-    console.log("\u2713 Added @opencode-ai/plugin to package.json");
   } else {
-    console.log("\u2713 @opencode-ai/plugin already in package.json");
+    console.log("\u2713 Plugin already installed");
   }
-  if (!deps[PLUGIN_NAME]) {
-    deps[PLUGIN_NAME] = PLUGIN_URL;
-    updated = true;
-    console.log("\u2713 Added opencode-remote-config to package.json");
-  } else {
-    console.log("\u2713 opencode-remote-config already in package.json");
-  }
-  if (updated) {
-    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + `
-`);
+  console.log(`
+\uD83D\uDCE6 Installing plugin dependencies...`);
+  try {
+    await $`bun install`.cwd(pluginDir).quiet();
+    console.log("\u2713 Plugin dependencies installed");
+  } catch {
+    try {
+      await $`npm install`.cwd(pluginDir).quiet();
+      console.log("\u2713 Plugin dependencies installed");
+    } catch {
+      console.log("\u26A0 Could not install plugin dependencies automatically");
+      console.log("  Run manually: cd .opencode/node_modules/opencode-remote-config && bun install");
+    }
   }
   const remoteConfigPath = join(opencodeDir, "remote-config.json");
   if (!existsSync(remoteConfigPath)) {
@@ -85,32 +133,19 @@ async function main() {
   if (!Array.isArray(opencodeJson.plugin)) {
     opencodeJson.plugin = [];
   }
+  const pluginPath = "./node_modules/opencode-remote-config";
   const plugins = opencodeJson.plugin;
-  if (!plugins.includes(PLUGIN_NAME)) {
-    plugins.push(PLUGIN_NAME);
+  const oldIndex = plugins.indexOf(PLUGIN_NAME);
+  if (oldIndex !== -1) {
+    plugins.splice(oldIndex, 1);
+  }
+  if (!plugins.includes(pluginPath)) {
+    plugins.push(pluginPath);
     writeFileSync(opencodeJsonPath, JSON.stringify(opencodeJson, null, 2) + `
 `);
-    console.log("\u2713 Added opencode-remote-config to opencode.json plugins");
+    console.log("\u2713 Added plugin to opencode.json");
   } else {
-    console.log("\u2713 opencode-remote-config already in opencode.json plugins");
-  }
-  console.log(`
-\uD83D\uDCE6 Installing dependencies...
-`);
-  try {
-    await $`bun install`.cwd(opencodeDir);
-    console.log(`
-\u2713 Dependencies installed with bun`);
-  } catch {
-    try {
-      await $`npm install`.cwd(opencodeDir);
-      console.log(`
-\u2713 Dependencies installed with npm`);
-    } catch (err) {
-      console.error(`
-\u2717 Failed to install dependencies. Run manually:`);
-      console.error("  cd .opencode && bun install");
-    }
+    console.log("\u2713 Plugin already in opencode.json");
   }
   console.log(`
 \uD83C\uDF89 Setup complete!
@@ -120,4 +155,7 @@ async function main() {
   console.log(`2. Start OpenCode
 `);
 }
-main().catch(console.error);
+main().catch((err) => {
+  console.error("\u2717 Setup failed:", err.message);
+  process.exit(1);
+});

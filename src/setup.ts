@@ -8,24 +8,70 @@
  * 
  * This script:
  * 1. Creates .opencode directory if needed
- * 2. Adds the plugin to .opencode/package.json
- * 3. Creates a default remote-config.json if needed
- * 4. Updates opencode.json to include the plugin
- * 5. Runs bun/npm install
+ * 2. Downloads the plugin from Bitbucket (zip)
+ * 3. Extracts it to node_modules (without .git)
+ * 4. Creates a default remote-config.json if needed
+ * 5. Updates opencode.json to include the plugin
+ * 6. Installs plugin dependencies
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
+import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync, copyFileSync, statSync } from "fs"
+import { join, basename } from "path"
 import { $ } from "bun"
+import { Readable } from "stream"
+import { createWriteStream } from "fs"
+import { pipeline } from "stream/promises"
 
 const PLUGIN_NAME = "opencode-remote-config"
-const PLUGIN_URL = "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
-const OPENCODE_PLUGIN = "@opencode-ai/plugin"
-const OPENCODE_PLUGIN_VERSION = "^1.1.0"
+const PLUGIN_ZIP_URL = "https://bitbucket.org/softrestaurant-team/opencode-remote-config/get/main.zip"
+
+async function downloadFile(url: string, destPath: string): Promise<void> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`Failed to download: ${response.statusText}`)
+  }
+  const fileStream = createWriteStream(destPath)
+  await pipeline(Readable.fromWeb(response.body as any), fileStream)
+}
+
+async function extractZip(zipPath: string, destDir: string): Promise<void> {
+  // Use PowerShell on Windows to extract zip
+  const isWindows = process.platform === "win32"
+  
+  if (isWindows) {
+    await $`powershell -Command "Expand-Archive -Path '${zipPath}' -DestinationPath '${destDir}' -Force"`
+  } else {
+    await $`unzip -o ${zipPath} -d ${destDir}`
+  }
+}
+
+function copyDirRecursive(src: string, dest: string): void {
+  if (!existsSync(dest)) {
+    mkdirSync(dest, { recursive: true })
+  }
+  
+  const entries = readdirSync(src, { withFileTypes: true })
+  
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name)
+    const destPath = join(dest, entry.name)
+    
+    // Skip .git directory
+    if (entry.name === ".git") continue
+    
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath)
+    } else {
+      copyFileSync(srcPath, destPath)
+    }
+  }
+}
 
 async function main() {
   const cwd = process.cwd()
   const opencodeDir = join(cwd, ".opencode")
+  const nodeModulesDir = join(opencodeDir, "node_modules")
+  const pluginDir = join(nodeModulesDir, PLUGIN_NAME)
   
   console.log("🔧 OpenCode Remote Config Setup\n")
   
@@ -37,49 +83,72 @@ async function main() {
     console.log("✓ .opencode directory exists")
   }
   
-  // 2. Update/create package.json
-  const packageJsonPath = join(opencodeDir, "package.json")
-  let packageJson: Record<string, unknown> = {}
-  
-  if (existsSync(packageJsonPath)) {
+  // 2. Download and extract plugin
+  if (!existsSync(pluginDir)) {
+    console.log("📥 Downloading plugin from Bitbucket...")
+    
+    const tempDir = join(opencodeDir, "_temp")
+    const zipPath = join(opencodeDir, "plugin.zip")
+    
     try {
-      packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
+      // Create temp directory
+      mkdirSync(tempDir, { recursive: true })
+      mkdirSync(nodeModulesDir, { recursive: true })
+      
+      // Download zip
+      await downloadFile(PLUGIN_ZIP_URL, zipPath)
+      console.log("✓ Downloaded plugin")
+      
+      // Extract zip
+      await extractZip(zipPath, tempDir)
+      console.log("✓ Extracted plugin")
+      
+      // Find extracted folder (Bitbucket adds a prefix)
+      const extractedFolders = readdirSync(tempDir).filter(f => 
+        statSync(join(tempDir, f)).isDirectory()
+      )
+      
+      if (extractedFolders.length === 0) {
+        throw new Error("No folder found in zip")
+      }
+      
+      const extractedFolder = join(tempDir, extractedFolders[0])
+      
+      // Copy to node_modules (without .git)
+      copyDirRecursive(extractedFolder, pluginDir)
+      console.log("✓ Installed plugin to node_modules")
+      
+      // Cleanup
+      rmSync(tempDir, { recursive: true, force: true })
+      rmSync(zipPath, { force: true })
+      
+    } catch (err) {
+      // Cleanup on error
+      if (existsSync(tempDir)) rmSync(tempDir, { recursive: true, force: true })
+      if (existsSync(zipPath)) rmSync(zipPath, { force: true })
+      throw err
+    }
+  } else {
+    console.log("✓ Plugin already installed")
+  }
+  
+  // 3. Install plugin dependencies
+  console.log("\n📦 Installing plugin dependencies...")
+  
+  try {
+    await $`bun install`.cwd(pluginDir).quiet()
+    console.log("✓ Plugin dependencies installed")
+  } catch {
+    try {
+      await $`npm install`.cwd(pluginDir).quiet()
+      console.log("✓ Plugin dependencies installed")
     } catch {
-      console.log("⚠ Could not parse existing package.json, creating new one")
+      console.log("⚠ Could not install plugin dependencies automatically")
+      console.log("  Run manually: cd .opencode/node_modules/opencode-remote-config && bun install")
     }
   }
   
-  // Ensure dependencies object exists
-  if (!packageJson.dependencies || typeof packageJson.dependencies !== "object") {
-    packageJson.dependencies = {}
-  }
-  
-  const deps = packageJson.dependencies as Record<string, string>
-  let updated = false
-  
-  // Add @opencode-ai/plugin if not present
-  if (!deps[OPENCODE_PLUGIN]) {
-    deps[OPENCODE_PLUGIN] = OPENCODE_PLUGIN_VERSION
-    updated = true
-    console.log("✓ Added @opencode-ai/plugin to package.json")
-  } else {
-    console.log("✓ @opencode-ai/plugin already in package.json")
-  }
-  
-  // Add plugin if not present
-  if (!deps[PLUGIN_NAME]) {
-    deps[PLUGIN_NAME] = PLUGIN_URL
-    updated = true
-    console.log("✓ Added opencode-remote-config to package.json")
-  } else {
-    console.log("✓ opencode-remote-config already in package.json")
-  }
-  
-  if (updated) {
-    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n")
-  }
-  
-  // 3. Create default remote-config.json if not exists
+  // 4. Create default remote-config.json if not exists
   const remoteConfigPath = join(opencodeDir, "remote-config.json")
   if (!existsSync(remoteConfigPath)) {
     const defaultConfig = {
@@ -98,7 +167,7 @@ async function main() {
     console.log("✓ remote-config.json already exists")
   }
   
-  // 4. Update/create opencode.json
+  // 5. Update/create opencode.json
   const opencodeJsonPath = join(opencodeDir, "opencode.json")
   let opencodeJson: Record<string, unknown> = {}
   
@@ -115,36 +184,26 @@ async function main() {
     opencodeJson.$schema = "https://opencode.ai/config.json"
   }
   
-  // Ensure plugin array exists and includes our plugin
+  // Ensure plugin array exists and includes our plugin with relative path
   if (!Array.isArray(opencodeJson.plugin)) {
     opencodeJson.plugin = []
   }
   
+  const pluginPath = "./node_modules/opencode-remote-config"
   const plugins = opencodeJson.plugin as string[]
-  if (!plugins.includes(PLUGIN_NAME)) {
-    plugins.push(PLUGIN_NAME)
-    writeFileSync(opencodeJsonPath, JSON.stringify(opencodeJson, null, 2) + "\n")
-    console.log("✓ Added opencode-remote-config to opencode.json plugins")
-  } else {
-    console.log("✓ opencode-remote-config already in opencode.json plugins")
+  
+  // Remove old reference if exists and add new path-based one
+  const oldIndex = plugins.indexOf(PLUGIN_NAME)
+  if (oldIndex !== -1) {
+    plugins.splice(oldIndex, 1)
   }
   
-  // 5. Run install
-  console.log("\n📦 Installing dependencies...\n")
-  
-  try {
-    // Try bun first
-    await $`bun install`.cwd(opencodeDir)
-    console.log("\n✓ Dependencies installed with bun")
-  } catch {
-    try {
-      // Fallback to npm
-      await $`npm install`.cwd(opencodeDir)
-      console.log("\n✓ Dependencies installed with npm")
-    } catch (err) {
-      console.error("\n✗ Failed to install dependencies. Run manually:")
-      console.error("  cd .opencode && bun install")
-    }
+  if (!plugins.includes(pluginPath)) {
+    plugins.push(pluginPath)
+    writeFileSync(opencodeJsonPath, JSON.stringify(opencodeJson, null, 2) + "\n")
+    console.log("✓ Added plugin to opencode.json")
+  } else {
+    console.log("✓ Plugin already in opencode.json")
   }
   
   console.log("\n🎉 Setup complete!\n")
@@ -153,4 +212,7 @@ async function main() {
   console.log("2. Start OpenCode\n")
 }
 
-main().catch(console.error)
+main().catch((err) => {
+  console.error("✗ Setup failed:", err.message)
+  process.exit(1)
+})
