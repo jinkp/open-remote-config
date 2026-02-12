@@ -20,6 +20,8 @@ import { $ } from "bun"
 
 const PLUGIN_NAME = "opencode-remote-config"
 const PLUGIN_URL = "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git"
+const OPENCODE_PLUGIN = "@opencode-ai/plugin"
+const OPENCODE_PLUGIN_VERSION = "^1.1.0"
 
 async function main() {
   const cwd = process.cwd()
@@ -53,14 +55,28 @@ async function main() {
   }
   
   const deps = packageJson.dependencies as Record<string, string>
+  let updated = false
+  
+  // Add @opencode-ai/plugin if not present
+  if (!deps[OPENCODE_PLUGIN]) {
+    deps[OPENCODE_PLUGIN] = OPENCODE_PLUGIN_VERSION
+    updated = true
+    console.log("✓ Added @opencode-ai/plugin to package.json")
+  } else {
+    console.log("✓ @opencode-ai/plugin already in package.json")
+  }
   
   // Add plugin if not present
   if (!deps[PLUGIN_NAME]) {
     deps[PLUGIN_NAME] = PLUGIN_URL
-    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n")
+    updated = true
     console.log("✓ Added opencode-remote-config to package.json")
   } else {
     console.log("✓ opencode-remote-config already in package.json")
+  }
+  
+  if (updated) {
+    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + "\n")
   }
   
   // 3. Create default remote-config.json if not exists

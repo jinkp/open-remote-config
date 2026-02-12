@@ -7,6 +7,8 @@ import { join } from "path";
 var {$ } = globalThis.Bun;
 var PLUGIN_NAME = "opencode-remote-config";
 var PLUGIN_URL = "git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git";
+var OPENCODE_PLUGIN = "@opencode-ai/plugin";
+var OPENCODE_PLUGIN_VERSION = "^1.1.0";
 async function main() {
   const cwd = process.cwd();
   const opencodeDir = join(cwd, ".opencode");
@@ -31,13 +33,24 @@ async function main() {
     packageJson.dependencies = {};
   }
   const deps = packageJson.dependencies;
+  let updated = false;
+  if (!deps[OPENCODE_PLUGIN]) {
+    deps[OPENCODE_PLUGIN] = OPENCODE_PLUGIN_VERSION;
+    updated = true;
+    console.log("\u2713 Added @opencode-ai/plugin to package.json");
+  } else {
+    console.log("\u2713 @opencode-ai/plugin already in package.json");
+  }
   if (!deps[PLUGIN_NAME]) {
     deps[PLUGIN_NAME] = PLUGIN_URL;
-    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + `
-`);
+    updated = true;
     console.log("\u2713 Added opencode-remote-config to package.json");
   } else {
     console.log("\u2713 opencode-remote-config already in package.json");
+  }
+  if (updated) {
+    writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + `
+`);
   }
   const remoteConfigPath = join(opencodeDir, "remote-config.json");
   if (!existsSync(remoteConfigPath)) {
