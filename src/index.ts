@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
 import { loadConfig, type RemoteSkillsConfig } from "./config"
-import { syncRepositories, type SyncResult } from "./git"
+import { syncRepositories, clearCache, clearRepoCache, type SyncResult } from "./git"
 import type { AgentConfig } from "./agent"
 import type { CommandConfig } from "./command"
 import {
@@ -300,6 +300,83 @@ export const RemoteSkillsPlugin: Plugin = async (ctx) => {
   logEndWithTime("opencode-remote-config plugin", pluginStartTime, "PLUGIN")
 
   return {
+    /**
+     * Commands hook: register custom commands
+     */
+    commands: {
+      "remote-sync": {
+        description: "Force re-sync all remote repositories (clears cache and re-downloads)",
+        template: "",
+        handler: async () => {
+          log("Force re-sync triggered by user command", "PLUGIN")
+          
+          // Clear all cached repos
+          const clearResult = clearCache()
+          if (clearResult.error) {
+            return `Error clearing cache: ${clearResult.error}`
+          }
+          
+          // Re-sync all repositories
+          const syncResult = await performSync(pluginConfig)
+          
+          const parts: string[] = []
+          if (syncResult.totalSkills > 0) parts.push(`${syncResult.totalSkills} skills`)
+          if (syncResult.totalPlugins > 0) parts.push(`${syncResult.totalPlugins} plugins`)
+          if (syncResult.remoteAgents.size > 0) parts.push(`${syncResult.remoteAgents.size} agents`)
+          if (syncResult.remoteCommands.size > 0) parts.push(`${syncResult.remoteCommands.size} commands`)
+          if (syncResult.remoteInstructions.length > 0) parts.push(`${syncResult.remoteInstructions.length} instructions`)
+          
+          if (parts.length === 0) {
+            return "Re-sync complete. No remote config found."
+          }
+          
+          return `Re-sync complete! ${parts.join(", ")} available.${syncResult.pluginsChanged ? " (Restart OpenCode to apply plugin changes)" : ""}`
+        }
+      },
+      "remote-clear": {
+        description: "Clear the remote config cache (repos will be re-downloaded on next start)",
+        template: "",
+        handler: async () => {
+          const result = clearCache()
+          if (result.error) {
+            return `Error: ${result.error}`
+          }
+          if (result.cleared) {
+            return `Cache cleared: ${result.path}\nRestart OpenCode to re-download repositories.`
+          }
+          return "Cache was already empty."
+        }
+      },
+      "remote-status": {
+        description: "Show status of remote config plugin",
+        template: "",
+        handler: async () => {
+          const lines: string[] = [
+            "=== Remote Config Status ===",
+            `Repositories configured: ${pluginConfig.repositories.length}`,
+            `Install method: ${pluginConfig.installMethod}`,
+            `Log level: ${pluginConfig.logLevel}`,
+            "",
+            "Repositories:"
+          ]
+          
+          for (const repo of pluginConfig.repositories) {
+            lines.push(`  - ${repo.url}${repo.ref ? ` (${repo.ref})` : ""}`)
+          }
+          
+          lines.push("")
+          lines.push("Current session:")
+          lines.push(`  Skills: ${totalSkills}`)
+          lines.push(`  Plugins: ${totalPlugins}`)
+          lines.push(`  Agents: ${remoteAgents.size}`)
+          lines.push(`  Commands: ${remoteCommands.size}`)
+          lines.push(`  Instructions: ${remoteInstructions.length}`)
+          
+          return lines.join("\n")
+        }
+      }
+    },
+    
     /**
      * Config hook: inject remote agents and commands into config
      * Priority: user config > first repository in config > subsequent repositories

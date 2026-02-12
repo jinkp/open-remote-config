@@ -5,6 +5,7 @@
     "": {
       "name": "opencode-remote-config",
       "dependencies": {
+        "@jgordijn/opencode-remote-config": "git+https://joelkeb@bitbucket.org/softrestaurant-team/opencode-remote-config.git",
         "gray-matter": "^4.0.3",
         "zod": "^3.24.1",
       },
@@ -20,6 +21,8 @@
     },
   },
   "packages": {
+    "@jgordijn/opencode-remote-config": ["@jgordijn/opencode-remote-config@git+https://joelkeb@bitbucket.org/softrestaurant-team/opencode-remote-config.git#0a10bf81061ec46c4730da8a55e33cdd0c057b10", { "dependencies": { "gray-matter": "^4.0.3", "zod": "^3.24.1" }, "peerDependencies": { "@opencode-ai/plugin": ">=1.0.0" } }, "0a10bf81061ec46c4730da8a55e33cdd0c057b10"],
+
     "@opencode-ai/plugin": ["@opencode-ai/plugin@1.0.204", "", { "dependencies": { "@opencode-ai/sdk": "1.0.204", "zod": "4.1.8" } }, "sha512-9bhPmOsebUoD++6Hy4zQVyUVSOEZl8C5KrlkG8NOwuk+b91uplF+GmzrUeeqfP8jqvboJPEaos1lkwA05xdj6Q=="],
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.0.204", "", {}, "sha512-lqhkpL+qp1QyXtW+HR6IXTeF/qIR+zxOl0efUFepNwzeaJEeVsbWrQUdapW/FBG6DqIxG0kuLPHn0duuHp1hPA=="],

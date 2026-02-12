@@ -20,6 +20,51 @@ const CACHE_BASE = path.join(
 )
 
 /**
+ * Get the cache base directory path
+ */
+export function getCacheBase(): string {
+  return CACHE_BASE
+}
+
+/**
+ * Clear the entire repository cache
+ * Forces a fresh clone on next sync
+ */
+export function clearCache(): { cleared: boolean; path: string; error?: string } {
+  try {
+    if (fs.existsSync(CACHE_BASE)) {
+      fs.rmSync(CACHE_BASE, { recursive: true, force: true })
+      log(`Cleared repository cache: ${CACHE_BASE}`, "CLEANUP")
+      return { cleared: true, path: CACHE_BASE }
+    }
+    return { cleared: false, path: CACHE_BASE }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    logError(`Failed to clear cache: ${error}`, "CLEANUP")
+    return { cleared: false, path: CACHE_BASE, error }
+  }
+}
+
+/**
+ * Clear cache for a specific repository
+ */
+export function clearRepoCache(repoId: string): { cleared: boolean; path: string; error?: string } {
+  const repoPath = path.join(CACHE_BASE, repoId)
+  try {
+    if (fs.existsSync(repoPath)) {
+      fs.rmSync(repoPath, { recursive: true, force: true })
+      log(`Cleared cache for repo: ${repoId}`, "CLEANUP")
+      return { cleared: true, path: repoPath }
+    }
+    return { cleared: false, path: repoPath }
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    logError(`Failed to clear repo cache: ${error}`, "CLEANUP")
+    return { cleared: false, path: repoPath, error }
+  }
+}
+
+/**
  * Check if a URL is a file:// URL (local directory)
  */
 export function isFileUrl(url: string): boolean {
