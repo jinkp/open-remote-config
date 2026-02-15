@@ -60,21 +60,89 @@ Plugin de OpenCode para sincronizar skills, agents, commands e instructions desd
    bun add -g opencode
    ```
 
-## Instalacion Rapida
+## Instalacion
+
+Hay **3 metodos** de instalacion. Usa el que mejor funcione en tu entorno.
+
+### Metodo 1: Clonar repositorio (Recomendado)
+
+Este metodo es el mas confiable y funciona en todos los entornos.
 
 ```bash
-# 1. Instalar el plugin globalmente
+# 1. Ir a la raiz de tu proyecto
+cd /ruta/a/tu/proyecto
+
+# 2. Crear carpeta .opencode y clonar el plugin
+mkdir -p .opencode/node_modules
+git clone --depth 1 https://bitbucket.org/softrestaurant-team/opencode-remote-config.git .opencode/node_modules/opencode-remote-config
+
+# 3. Eliminar carpeta .git del plugin (evita conflictos de repos anidados)
+rm -rf .opencode/node_modules/opencode-remote-config/.git
+
+# 4. Instalar dependencias del plugin
+cd .opencode/node_modules/opencode-remote-config
+bun install
+cd ../../..
+
+# 5. Crear archivo de configuracion
+cat > .opencode/opencode.json << 'EOF'
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["./node_modules/opencode-remote-config"]
+}
+EOF
+
+# 6. Crear configuracion de repositorios remotos
+cat > .opencode/remote-config.json << 'EOF'
+{
+  "repositories": [
+    {
+      "url": "https://bitbucket.org/tu-org/skills.git",
+      "ref": "main"
+    }
+  ],
+  "installMethod": "copy",
+  "logLevel": "info"
+}
+EOF
+
+# 7. Agregar .opencode al .gitignore
+echo ".opencode" >> .gitignore
+```
+
+### Metodo 2: Usando npm (global)
+
+```bash
+# 1. Instalar globalmente con npm
+npm install -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
+
+# 2. Ir a tu proyecto y ejecutar setup
+cd /ruta/a/tu/proyecto
+npx opencode-remote-config-setup
+
+# 3. Agregar .opencode al .gitignore
+echo ".opencode" >> .gitignore
+```
+
+### Metodo 3: Usando bun (global)
+
+> **Nota:** Este metodo puede fallar con error "DependencyLoop" en algunas versiones de bun. Si falla, usa el Metodo 1 o 2.
+
+```bash
+# 1. Instalar globalmente con bun
 bun add -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
 
 # 2. Ejecutar setup en tu proyecto
+cd /ruta/a/tu/proyecto
+
 # Windows:
-bun C:\Users\TU_USUARIO\.bun\install\global\node_modules\opencode-remote-config\dist\setup.js
+bun %USERPROFILE%\.bun\install\global\node_modules\opencode-remote-config\dist\setup.js
 
 # Linux/macOS:
 bun ~/.bun/install/global/node_modules/opencode-remote-config/dist/setup.js
 
-# 3. Agregar .opencode al .gitignore de tu proyecto
-echo .opencode >> .gitignore
+# 3. Agregar .opencode al .gitignore
+echo ".opencode" >> .gitignore
 ```
 
 **Importante:** Agrega `.opencode` a tu `.gitignore` para no subir el plugin y node_modules al repositorio.
@@ -88,11 +156,29 @@ Edita `.opencode/remote-config.json`:
   "repositories": [
     {
       "url": "https://bitbucket.org/tu-org/skills.git",
-      "ref": "main"
+      "ref": "main",
+      "skills": {
+        "include": ["skill-name-1", "skill-name-2"]
+      }
     }
   ],
-  "installMethod": "copy"
+  "installMethod": "copy",
+  "logLevel": "info"
 }
+```
+
+## Estructura del Proyecto
+
+```
+tu-proyecto/
+├── .opencode/
+│   ├── node_modules/
+│   │   └── opencode-remote-config/  (plugin instalado)
+│   ├── opencode.json                (registra el plugin)
+│   ├── remote-config.json           (configura repositorios)
+│   └── package.json                 (dependencias)
+├── .gitignore                       (debe incluir .opencode)
+└── ... (resto del proyecto)
 ```
 
 ## Como Funciona
@@ -143,14 +229,61 @@ Edita `.opencode/remote-config.json`:
 | `/remote-clear` | Limpia cache |
 | `/remote-status` | Muestra estado |
 
-## Troubleshooting Rapido
+## Troubleshooting
 
-| Problema | Solucion |
-|----------|----------|
-| `bun: command not found` | Reinstalar Bun y reiniciar terminal |
-| `git: command not found` | Instalar Git para Windows |
-| Error de autenticacion | Configurar credenciales: `git config --global credential.helper manager` |
-| Skills no aparecen | Verificar nombres con guiones en filtros, no slashes |
+### Error: "DependencyLoop" con bun
+
+```
+error: Package "opencode-remote-config@..." has a dependency loop
+```
+
+**Causa:** Bug en bun al resolver dependencias de paquetes git.
+
+**Soluciones:**
+1. **Usar Metodo 1** (clonar repositorio manualmente) - Recomendado
+2. **Usar npm** en lugar de bun:
+   ```bash
+   npm install -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
+   ```
+3. **Limpiar cache de bun** y reintentar:
+   ```bash
+   rm -rf ~/.bun/install/cache
+   bun add -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
+   ```
+
+### Error: "bun: command not found"
+
+Reinstalar Bun y reiniciar terminal:
+```bash
+# Windows
+powershell -c "irm bun.sh/install.ps1 | iex"
+
+# Linux/macOS
+curl -fsSL https://bun.sh/install | bash
+```
+
+### Error: "git: command not found"
+
+Instalar Git:
+- **Windows:** https://git-scm.com/download/win
+- **macOS:** `brew install git`
+- **Linux:** `sudo apt install git`
+
+### Error de autenticacion en repositorios privados
+
+Configurar credential helper:
+```bash
+git config --global credential.helper manager
+```
+
+### Skills no aparecen en OpenCode
+
+1. Verificar que `remote-config.json` tenga la configuracion correcta
+2. Usar nombres con guiones en filtros, no slashes:
+   - Correcto: `"developer-code-analyzer"`
+   - Incorrecto: `"developer/code-analyzer"`
+3. Ejecutar `/remote-sync` para forzar sincronizacion
+4. Revisar logs en `~/.cache/opencode/remote-config/plugin.log`
 
 ## Licencia
 
