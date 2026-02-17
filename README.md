@@ -399,6 +399,32 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 curl -fsSL https://bun.sh/install | bash
 ```
 
+### Error: "Module not found ...setup.js" al usar npx con fnm
+
+Si usas **fnm** (Fast Node Manager) en Windows, el PATH activo apunta a un directorio temporal (`fnm_multishells`) que puede no tener acceso al paquete instalado globalmente.
+
+**Solucion: instalar y ejecutar con el npm de fnm correctamente:**
+```powershell
+# Verificar que el paquete este instalado
+npm list -g opencode-remote-config
+
+# Si aparece con un path -> (flecha) apuntando a un directorio temporal,
+# desinstalar y reinstalar:
+npm uninstall -g opencode-remote-config
+npm install -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
+
+# Ejecutar con npx:
+npx opencode-remote-config-setup
+```
+
+**Alternativa directa si npx sigue fallando:**
+```powershell
+# Encontrar donde npm instalo el paquete realmente
+npm root -g
+# Ejecutar el setup directamente con node:
+node "$(npm root -g)\opencode-remote-config\dist\setup.js"
+```
+
 ### Error: "opencode-remote-config-setup: command not found" con npm
 
 En Windows, npm global puede no estar en el PATH por defecto.
@@ -417,9 +443,9 @@ $npmBin = npm bin -g
 where opencode-remote-config-setup
 ```
 
-**Alternativa: ejecutar directamente con npx**
+**Alternativa: ejecutar directamente con node**
 ```powershell
-npx opencode-remote-config-setup
+node "$(npm root -g)\opencode-remote-config\dist\setup.js"
 ```
 
 ### Error: "npm: command not found"

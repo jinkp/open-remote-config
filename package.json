@@ -20,7 +20,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "bun build src/index.ts src/setup.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target bun && bun build src/setup.ts --outdir dist --target node",
     "dev": "bun build src/index.ts --outdir dist --target bun --watch",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
