@@ -19,20 +19,35 @@ Plugin de OpenCode para sincronizar skills, agents, commands e instructions desd
    - Descargar: https://git-scm.com/download/win
    - Verificar: `git --version`
 
-2. **Bun**
+2. **Node.js + npm** *(opcion recomendada)*
+   - Descargar: https://nodejs.org (incluye npm)
+   - Verificar:
+     ```powershell
+     node --version
+     npm --version
+     ```
+
+3. **Bun** *(alternativa a npm)*
    ```powershell
    powershell -c "irm bun.sh/install.ps1 | iex"
    ```
    - Verificar: `bun --version`
    - Requiere reiniciar la terminal despues de instalar
 
-3. **OpenCode**
-   ```bash
+4. **OpenCode**
+
+   Con npm:
+   ```powershell
+   npm install -g opencode
+   ```
+
+   Con bun:
+   ```powershell
    bun add -g opencode
    ```
    - Verificar: `opencode --version`
 
-4. **Cuenta en Bitbucket** (si usas repositorios privados)
+5. **Cuenta en Bitbucket** (si usas repositorios privados)
    - Crear cuenta: https://bitbucket.org
    - Configurar credenciales Git:
      ```bash
@@ -50,12 +65,34 @@ Plugin de OpenCode para sincronizar skills, agents, commands e instructions desd
    sudo apt install git
    ```
 
-2. **Bun**
+2. **Node.js + npm** *(opcion recomendada)*
+   ```bash
+   # macOS
+   brew install node
+
+   # Ubuntu/Debian
+   sudo apt install nodejs npm
+   ```
+   - Verificar:
+     ```bash
+     node --version
+     npm --version
+     ```
+
+3. **Bun** *(alternativa a npm)*
    ```bash
    curl -fsSL https://bun.sh/install | bash
    ```
+   - Verificar: `bun --version`
 
-3. **OpenCode**
+4. **OpenCode**
+
+   Con npm:
+   ```bash
+   npm install -g opencode
+   ```
+
+   Con bun:
    ```bash
    bun add -g opencode
    ```
@@ -116,12 +153,45 @@ echo ".opencode" >> .gitignore
 # 1. Instalar globalmente con npm
 npm install -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
 
-# 2. Ir a tu proyecto y ejecutar setup
+# 2. Verificar que el plugin quedo instalado globalmente
+npm list -g opencode-remote-config
+# Debe mostrar: opencode-remote-config@x.x.x
+
+# Tambien puedes verificar la ubicacion del paquete:
+npm root -g
+# Windows tipico: C:\Users\<usuario>\AppData\Roaming\npm\node_modules
+# Linux/macOS tipico: /usr/local/lib/node_modules
+
+# 3. Ir a tu proyecto y ejecutar setup
 cd /ruta/a/tu/proyecto
 npx opencode-remote-config-setup
 
-# 3. Agregar .opencode al .gitignore
+# 4. Agregar .opencode al .gitignore
 echo ".opencode" >> .gitignore
+```
+
+**Verificacion adicional en Windows (PowerShell):**
+```powershell
+# Ver todos los paquetes globales instalados con npm
+npm list -g --depth=0
+
+# Ver solo opencode-remote-config
+npm list -g opencode-remote-config
+
+# Ver ubicacion del binario del setup
+where opencode-remote-config-setup
+```
+
+**Verificacion adicional en Linux/macOS:**
+```bash
+# Ver todos los paquetes globales instalados con npm
+npm list -g --depth=0
+
+# Ver solo opencode-remote-config
+npm list -g opencode-remote-config
+
+# Ver ubicacion del binario del setup
+which opencode-remote-config-setup
 ```
 
 ### Metodo 3: Usando bun (global)
@@ -132,7 +202,42 @@ echo ".opencode" >> .gitignore
 # 1. Instalar globalmente con bun
 bun add -g git+https://bitbucket.org/softrestaurant-team/opencode-remote-config.git
 
-# 2. Ejecutar setup en tu proyecto
+# 2. Verificar que el plugin quedo instalado globalmente
+bun pm ls -g
+# Debe mostrar opencode-remote-config en la lista
+
+# Tambien puedes verificar la ubicacion:
+# Windows:   %USERPROFILE%\.bun\install\global\node_modules\opencode-remote-config
+# Linux/macOS: ~/.bun/install/global/node_modules/opencode-remote-config
+```
+
+**Verificacion adicional en Windows (PowerShell):**
+```powershell
+# Ver paquetes globales de bun
+bun pm ls -g
+
+# Verificar que la carpeta del paquete existe
+Test-Path "$env:USERPROFILE\.bun\install\global\node_modules\opencode-remote-config"
+# Debe retornar: True
+
+# Ver binarios globales disponibles
+dir "$env:USERPROFILE\.bun\bin"
+```
+
+**Verificacion adicional en Linux/macOS:**
+```bash
+# Ver paquetes globales de bun
+bun pm ls -g
+
+# Verificar que la carpeta del paquete existe
+ls ~/.bun/install/global/node_modules/opencode-remote-config
+
+# Ver binarios globales disponibles
+ls ~/.bun/bin
+```
+
+```bash
+# 3. Ejecutar setup en tu proyecto
 cd /ruta/a/tu/proyecto
 
 # Windows:
@@ -141,7 +246,7 @@ bun %USERPROFILE%\.bun\install\global\node_modules\opencode-remote-config\dist\s
 # Linux/macOS:
 bun ~/.bun/install/global/node_modules/opencode-remote-config/dist/setup.js
 
-# 3. Agregar .opencode al .gitignore
+# 4. Agregar .opencode al .gitignore
 echo ".opencode" >> .gitignore
 ```
 
@@ -261,6 +366,36 @@ powershell -c "irm bun.sh/install.ps1 | iex"
 # Linux/macOS
 curl -fsSL https://bun.sh/install | bash
 ```
+
+### Error: "opencode-remote-config-setup: command not found" con npm
+
+En Windows, npm global puede no estar en el PATH por defecto.
+
+**Verificar y corregir el PATH en Windows:**
+```powershell
+# Ver donde npm instala los binarios globales
+npm bin -g
+# Tipico: C:\Users\<usuario>\AppData\Roaming\npm
+
+# Agregar al PATH de forma permanente (PowerShell como Administrador):
+$npmBin = npm bin -g
+[Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";$npmBin", "User")
+
+# Reiniciar la terminal y verificar:
+where opencode-remote-config-setup
+```
+
+**Alternativa: ejecutar directamente con npx**
+```powershell
+npx opencode-remote-config-setup
+```
+
+### Error: "npm: command not found"
+
+Instalar Node.js (incluye npm):
+- **Windows:** https://nodejs.org
+- **macOS:** `brew install node`
+- **Linux:** `sudo apt install nodejs npm`
 
 ### Error: "git: command not found"
 
