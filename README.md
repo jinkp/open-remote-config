@@ -97,6 +97,38 @@ Plugin de OpenCode para sincronizar skills, agents, commands e instructions desd
    bun add -g opencode
    ```
 
+## El comando setup
+
+`opencode-remote-config-setup` es un script que **automatiza la instalacion del plugin en tu proyecto**. Ejecutalo una vez por proyecto desde la raiz del mismo.
+
+**Que hace el setup automaticamente:**
+
+1. Crea la carpeta `.opencode/` si no existe
+2. Clona el plugin desde Bitbucket en `.opencode/node_modules/opencode-remote-config/`
+3. Elimina la carpeta `.git` del plugin (evita conflictos de repos anidados)
+4. Instala las dependencias del plugin (intenta con `bun`, si falla usa `npm`)
+5. Crea `.opencode/remote-config.json` con una configuracion base si no existe
+6. Crea o actualiza `.opencode/opencode.json` para registrar el plugin
+
+**Como ejecutarlo** (segun como instalaste el plugin):
+
+```bash
+# Si instalaste con npm (global):
+npx opencode-remote-config-setup
+
+# Si instalaste con bun (global) en Windows:
+bun %USERPROFILE%\.bun\install\global\node_modules\opencode-remote-config\dist\setup.js
+
+# Si instalaste con bun (global) en Linux/macOS:
+bun ~/.bun/install/global/node_modules/opencode-remote-config/dist/setup.js
+```
+
+**Despues del setup**, solo necesitas editar `.opencode/remote-config.json` para agregar tus repositorios de skills y abrir OpenCode.
+
+> El setup es idempotente: si ya existe la carpeta, los archivos de configuracion o el plugin, los omite sin sobreescribir.
+
+---
+
 ## Instalacion
 
 Hay **3 metodos** de instalacion. Usa el que mejor funcione en tu entorno.
