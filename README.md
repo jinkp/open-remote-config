@@ -140,7 +140,7 @@ Descarga y ejecuta el script desde la **raiz de tu proyecto**. Valida prerequisi
 **Windows (PowerShell):**
 ```powershell
 cd C:\ruta\a\tu\proyecto
-Invoke-WebRequest -Uri "https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.bat" -OutFile setup.bat
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jinkp/open-remote-config/main/setup.bat" -OutFile setup.bat
 .\setup.bat
 del setup.bat
 ```
@@ -148,18 +148,18 @@ del setup.bat
 **Windows (CMD):**
 ```cmd
 cd C:\ruta\a\tu\proyecto
-curl -o setup.bat https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.bat && setup.bat && del setup.bat
+curl -o setup.bat https://raw.githubusercontent.com/jinkp/open-remote-config/main/setup.bat && setup.bat && del setup.bat
 ```
 
 **Linux/macOS:**
 ```bash
 cd /ruta/a/tu/proyecto
-curl -fsSL https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jinkp/open-remote-config/main/setup.sh | bash
 ```
 
 O descargarlo primero para revisarlo:
 ```bash
-curl -o setup.sh https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.sh
+curl -o setup.sh https://raw.githubusercontent.com/jinkp/open-remote-config/main/setup.sh
 chmod +x setup.sh
 ./setup.sh
 rm setup.sh
