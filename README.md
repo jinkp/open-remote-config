@@ -131,12 +131,92 @@ bun ~/.bun/install/global/node_modules/opencode-remote-config/dist/setup.js
 
 ## Instalacion
 
-Hay **3 metodos** de instalacion. Usa el que mejor funcione en tu entorno.
+Hay **4 metodos** de instalacion. Usa el que mejor funcione en tu entorno.
 
-### Metodo 1: Clonar repositorio (Recomendado)
+### Metodo 0: Script automatico (Recomendado)
 
-Este metodo es el mas confiable y funciona en todos los entornos.
+Descarga y ejecuta el script desde la **raiz de tu proyecto**. Valida prerequisitos, clona el plugin, instala dependencias y crea los archivos de configuracion en un solo paso.
 
+**Windows (PowerShell):**
+```powershell
+cd C:\ruta\a\tu\proyecto
+Invoke-WebRequest -Uri "https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.bat" -OutFile setup.bat
+.\setup.bat
+del setup.bat
+```
+
+**Windows (CMD):**
+```cmd
+cd C:\ruta\a\tu\proyecto
+curl -o setup.bat https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.bat && setup.bat && del setup.bat
+```
+
+**Linux/macOS:**
+```bash
+cd /ruta/a/tu/proyecto
+curl -fsSL https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.sh | bash
+```
+
+O descargarlo primero para revisarlo:
+```bash
+curl -o setup.sh https://bitbucket.org/softrestaurant-team/opencode-remote-config/raw/main/setup.sh
+chmod +x setup.sh
+./setup.sh
+rm setup.sh
+```
+
+El script es **idempotente**: si ya existe el plugin o los archivos de configuracion, los omite sin sobreescribir.
+
+### Metodo 1: Clonar repositorio manualmente
+
+Equivalente al script automatico pero paso a paso. Util si el script falla o quieres control total.
+
+**Windows (PowerShell o CMD):**
+```cmd
+:: 1. Ir a la raiz de tu proyecto
+cd C:\ruta\a\tu\proyecto
+
+:: 2. Crear carpeta .opencode y clonar el plugin
+mkdir .opencode\node_modules
+git clone --depth 1 https://bitbucket.org/softrestaurant-team/opencode-remote-config.git .opencode\node_modules\opencode-remote-config
+
+:: 3. Eliminar carpeta .git del plugin (evita conflictos de repos anidados)
+rmdir /s /q .opencode\node_modules\opencode-remote-config\.git
+
+:: 4. Instalar dependencias del plugin
+cd .opencode\node_modules\opencode-remote-config
+npm install
+cd ..\..\..
+
+:: 5. Agregar .opencode al .gitignore
+echo .opencode >> .gitignore
+```
+
+Luego crear los archivos de configuracion manualmente (en cualquier editor):
+
+`.opencode\opencode.json`:
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["./node_modules/opencode-remote-config"]
+}
+```
+
+`.opencode\remote-config.json`:
+```json
+{
+  "repositories": [
+    {
+      "url": "https://bitbucket.org/tu-org/skills.git",
+      "ref": "main"
+    }
+  ],
+  "installMethod": "copy",
+  "logLevel": "info"
+}
+```
+
+**Linux/macOS:**
 ```bash
 # 1. Ir a la raiz de tu proyecto
 cd /ruta/a/tu/proyecto
@@ -150,7 +230,7 @@ rm -rf .opencode/node_modules/opencode-remote-config/.git
 
 # 4. Instalar dependencias del plugin
 cd .opencode/node_modules/opencode-remote-config
-bun install
+npm install
 cd ../../..
 
 # 5. Crear archivo de configuracion
