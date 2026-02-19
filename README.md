@@ -1,5 +1,7 @@
 # opencode-remote-config
 
+> **Fork** del proyecto original [@jgordijn/opencode-remote-config](https://www.npmjs.com/package/%40jgordijn%2Fopencode-remote-config) con soporte ampliado para Windows, instalacion via npm/Node.js y scripts de setup automatico.
+
 Plugin de OpenCode para sincronizar skills, agents, commands e instructions desde repositorios Git remotos.
 
 ## Caracteristicas
